@@ -14,16 +14,252 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      categories: {
+        Row: {
+          color: string
+          created_at: string
+          family_id: string
+          icon: string
+          id: string
+          name: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          family_id: string
+          icon?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          family_id?: string
+          icon?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      families: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          invite_code: string
+          monthly_budget: number | null
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          invite_code?: string
+          monthly_budget?: number | null
+          name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          invite_code?: string
+          monthly_budget?: number | null
+          name?: string
+        }
+        Relationships: []
+      }
+      items: {
+        Row: {
+          assigned_to: string | null
+          category_id: string | null
+          created_at: string
+          created_by: string
+          estimated_cost: number | null
+          family_id: string
+          id: string
+          is_recurring: boolean
+          name: string
+          notes: string | null
+          priority: Database["public"]["Enums"]["item_priority"]
+          quantity: number | null
+          recur_interval: Database["public"]["Enums"]["recur_interval"] | null
+          status: Database["public"]["Enums"]["item_status"]
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          category_id?: string | null
+          created_at?: string
+          created_by: string
+          estimated_cost?: number | null
+          family_id: string
+          id?: string
+          is_recurring?: boolean
+          name: string
+          notes?: string | null
+          priority?: Database["public"]["Enums"]["item_priority"]
+          quantity?: number | null
+          recur_interval?: Database["public"]["Enums"]["recur_interval"] | null
+          status?: Database["public"]["Enums"]["item_status"]
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          category_id?: string | null
+          created_at?: string
+          created_by?: string
+          estimated_cost?: number | null
+          family_id?: string
+          id?: string
+          is_recurring?: boolean
+          name?: string
+          notes?: string | null
+          priority?: Database["public"]["Enums"]["item_priority"]
+          quantity?: number | null
+          recur_interval?: Database["public"]["Enums"]["recur_interval"] | null
+          status?: Database["public"]["Enums"]["item_status"]
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "items_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "items_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          family_id: string | null
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          family_id?: string | null
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          family_id?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_history: {
+        Row: {
+          category_id: string | null
+          cost: number | null
+          family_id: string
+          id: string
+          item_name: string
+          purchased_at: string
+          purchased_by: string | null
+          quantity: number | null
+          unit: string | null
+        }
+        Insert: {
+          category_id?: string | null
+          cost?: number | null
+          family_id: string
+          id?: string
+          item_name: string
+          purchased_at?: string
+          purchased_by?: string | null
+          quantity?: number | null
+          unit?: string | null
+        }
+        Update: {
+          category_id?: string | null
+          cost?: number | null
+          family_id?: string
+          id?: string
+          item_name?: string
+          purchased_at?: string
+          purchased_by?: string | null
+          quantity?: number | null
+          unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_history_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_history_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_history_purchased_by_fkey"
+            columns: ["purchased_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      current_family_id: { Args: never; Returns: string }
+      generate_invite_code: { Args: never; Returns: string }
     }
     Enums: {
-      [_ in never]: never
+      item_priority: "urgent" | "normal" | "low"
+      item_status: "needed" | "low_stock" | "stocked"
+      recur_interval: "daily" | "weekly" | "monthly"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +386,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      item_priority: ["urgent", "normal", "low"],
+      item_status: ["needed", "low_stock", "stocked"],
+      recur_interval: ["daily", "weekly", "monthly"],
+    },
   },
 } as const
