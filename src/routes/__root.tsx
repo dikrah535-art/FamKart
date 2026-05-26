@@ -9,6 +9,8 @@ import {
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
+import { AuthProvider } from "@/lib/auth-context";
+import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
   return (
@@ -72,14 +74,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "NestList — Family Household Manager" },
+      { name: "description", content: "Organize your household, track essentials, and share lists with your family in real time." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "NestList — Family Household Manager" },
+      { property: "og:description", content: "Organize your household, track essentials, and share lists with your family in real time." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "theme-color", content: "#0F0F0F" },
     ],
     links: [
       {
@@ -113,7 +116,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
+      <AuthProvider>
+        <Outlet />
+        <Toaster position="top-right" theme="dark" richColors />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
