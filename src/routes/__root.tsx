@@ -83,6 +83,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
       { name: "theme-color", content: "#0F0F0F" },
+      { name: "twitter:title", content: "FamKart — Family Household Manager" },
+      { name: "twitter:description", content: "Organize your household, track essentials, and share lists with your family in real time." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/2a80b933-c4a1-401c-a34b-adae63ed6b82/id-preview-a5ccc448--35d304d1-b580-4bb3-bfc7-ec88014d2522.lovable.app-1779905047366.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/2a80b933-c4a1-401c-a34b-adae63ed6b82/id-preview-a5ccc448--35d304d1-b580-4bb3-bfc7-ec88014d2522.lovable.app-1779905047366.png" },
     ],
     links: [
       {
