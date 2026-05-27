@@ -60,6 +60,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Handle Lovable OAuth broker return (full-page redirect flow).
+    // Tokens may come back in either the URL hash or query string.
+    const consumeOAuthTokens = async () => {
+      if (typeof window === "undefined") return false;
+      const parse = (s: string) => new URLSearchParams(s.startsWith("#") || s.startsWith("?") ? s.slice(1) : s);
+      const sources = [window.location.hash, window.location.search];
+      for (const src of sources) {
+        if (!src) continue;
+        const p = parse(src);
+        const access_token = p.get("access_token");
+        const refresh_token = p.get("refresh_token");
+        if (access_token && refresh_token) {
+          try {
+            await supabase.auth.setSession({ access_token, refresh_token });
+          } catch (e) {
+            console.error("[auth] setSession from URL failed", e);
+          }
+          // Clean the URL so tokens don't linger.
+          const url = new URL(window.location.href);
+          ["access_token", "refresh_token", "expires_in", "expires_at", "token_type", "provider_token", "provider_refresh_token", "type", "state"].forEach((k) => url.searchParams.delete(k));
+          url.hash = "";
+          window.history.replaceState({}, "", url.toString());
+          return true;
+        }
+      }
+      return false;
+    };
+
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
       setSession(s);
       setUser(s?.user ?? null);
@@ -70,12 +98,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setFamily(null);
       }
     });
-    supabase.auth.getSession().then(async ({ data }) => {
+    (async () => {
+      await consumeOAuthTokens();
+      const { data } = await supabase.auth.getSession();
       setSession(data.session);
       setUser(data.session?.user ?? null);
       if (data.session?.user) await loadProfile(data.session.user.id);
       setLoading(false);
-    });
+    })();
     return () => sub.subscription.unsubscribe();
   }, []);
 

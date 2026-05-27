@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
+import { useNavigate } from "@tanstack/react-router";
 import { lovable } from "@/integrations/lovable";
 
 function GoogleLogo() {
@@ -18,6 +19,7 @@ function GoogleLogo() {
 export function GoogleSignInButton({ label = "Continue with Google" }: { label?: string }) {
   const [loading, setLoading] = useState(false);
   const reduce = useReducedMotion();
+  const navigate = useNavigate();
 
   const onClick = async () => {
     setLoading(true);
@@ -30,8 +32,10 @@ export function GoogleSignInButton({ label = "Continue with Google" }: { label?:
       return;
     }
     if (result.redirected) return;
-    // Session set — root listener will route the user.
-    window.location.href = "/";
+    // Session was set by the lovable broker (popup flow).
+    // Let the landing page route the user based on auth + family state.
+    toast.success("Signed in!");
+    navigate({ to: "/" });
   };
 
   return (
