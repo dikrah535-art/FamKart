@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { BackButton } from "@/components/BackButton";
 
 export const Route = createFileRoute("/_app/settings")({ component: SettingsPage });
 
@@ -51,6 +52,7 @@ function SettingsPage() {
 
   return (
     <div className="space-y-6 max-w-2xl">
+      <BackButton label="Back" />
       <header>
         <h1 className="text-3xl font-bold">Settings</h1>
       </header>

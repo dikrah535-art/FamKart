@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { fmtDate, inr } from "@/lib/format";
 import { toast } from "sonner";
+import { BackButton } from "@/components/BackButton";
 
 export const Route = createFileRoute("/_app/history")({ component: HistoryPage });
 
@@ -53,6 +54,7 @@ function HistoryPage() {
 
   return (
     <div className="space-y-6">
+      <BackButton label="Back" />
       <header>
         <h1 className="text-3xl font-bold">Purchase history</h1>
         <p className="text-sm text-muted-foreground">Everything your family has bought.</p>

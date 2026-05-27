@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { inr } from "@/lib/format";
 import { toast } from "sonner";
+import { BackButton } from "@/components/BackButton";
 
 export const Route = createFileRoute("/_app/budget")({ component: BudgetPage });
 
@@ -75,6 +76,7 @@ function BudgetPage() {
 
   return (
     <div className="space-y-6">
+      <BackButton label="Back" />
       <header>
         <h1 className="text-3xl font-bold">Budget</h1>
         <p className="text-sm text-muted-foreground">Track monthly spend across categories.</p>
