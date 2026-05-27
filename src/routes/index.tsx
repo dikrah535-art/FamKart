@@ -27,10 +27,8 @@ function Landing() {
       </div>
       <nav className="flex items-center justify-between px-6 py-5 md:px-12">
         <div className="flex items-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
-            <Home className="h-5 w-5" />
-          </div>
-          <span className="text-lg font-bold tracking-tight">NestList</span>
+          <ShoppingCart className="h-6 w-6" style={{ color: "#3ECF8E" }} />
+          <span className="text-lg font-bold tracking-tight text-white">FamKart</span>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={() => navigate({ to: "/login" })}>Log in</Button>

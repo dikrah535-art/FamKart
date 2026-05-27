@@ -2,11 +2,13 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Home, Loader2 } from "lucide-react";
+import { Loader2, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { PasswordInput } from "@/components/PasswordInput";
+import { GoogleSignInButton, AuthDivider } from "@/components/GoogleSignInButton";
 
 export const Route = createFileRoute("/signup")({ component: SignupPage });
 
@@ -42,15 +44,17 @@ function SignupPage() {
       </div>
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
         <Link to="/" className="mb-6 flex items-center justify-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
-            <Home className="h-5 w-5" />
-          </div>
-          <span className="text-lg font-bold">NestList</span>
+          <ShoppingCart className="h-5 w-5" style={{ color: "#3ECF8E" }} />
+          <span className="text-lg font-bold text-white">FamKart</span>
         </Link>
         <div className="glass rounded-2xl p-8">
           <h1 className="text-2xl font-bold">Create your account</h1>
           <p className="mt-1 text-sm text-muted-foreground">Start organizing your home in minutes.</p>
-          <form onSubmit={submit} className="mt-6 space-y-4">
+          <div className="mt-6">
+            <GoogleSignInButton label="Sign up with Google" />
+            <AuthDivider />
+          </div>
+          <form onSubmit={submit} className="space-y-4">
             <div className="space-y-2">
               <Label>Full name</Label>
               <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" />
@@ -61,7 +65,7 @@ function SignupPage() {
             </div>
             <div className="space-y-2">
               <Label>Password</Label>
-              <Input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" />
+              <PasswordInput required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create account"}

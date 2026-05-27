@@ -2,7 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Home, Plus, Users, Loader2 } from "lucide-react";
+import { Plus, Users, Loader2, ShoppingCart } from "lucide-react";
+import { BackButton } from "@/components/BackButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,11 +65,12 @@ function OnboardingPage() {
       </div>
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-2xl">
         <div className="mb-6 flex items-center justify-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
-            <Home className="h-5 w-5" />
-          </div>
-          <span className="text-lg font-bold">NestList</span>
+          <ShoppingCart className="h-6 w-6" style={{ color: "#3ECF8E" }} />
+          <span className="text-lg font-bold text-white">FamKart</span>
         </div>
+        {mode !== "choose" && (
+          <div className="mb-3"><BackButton label="Back" /></div>
+        )}
 
         {mode === "choose" && (
           <div className="glass rounded-2xl p-8 text-center">
