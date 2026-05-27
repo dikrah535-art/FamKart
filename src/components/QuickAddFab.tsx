@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { ItemFormDrawer } from "./ItemFormDrawer";
 
 export function QuickAddFab() {
   const [open, setOpen] = useState(false);
+  const reduce = useReducedMotion();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -22,13 +23,19 @@ export function QuickAddFab() {
   return (
     <>
       <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
+        whileHover={reduce ? undefined : { scale: 1.1 }}
+        whileTap={reduce ? undefined : { scale: 0.95 }}
         onClick={() => setOpen(true)}
         className="pulse-glow fixed bottom-6 right-6 z-40 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg"
         aria-label="Quick add (N)"
       >
-        <Plus className="h-6 w-6" />
+        <motion.span
+          whileHover={reduce ? undefined : { rotate: 45 }}
+          transition={{ type: "spring", stiffness: 300 }}
+          className="grid place-items-center"
+        >
+          <Plus className="h-6 w-6" />
+        </motion.span>
       </motion.button>
       <ItemFormDrawer open={open} onClose={() => setOpen(false)} />
     </>

@@ -1,7 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Plus } from "lucide-react";
+import { BackButton } from "@/components/BackButton";
+import { CategoryIcon } from "@/components/CategoryIcon";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -18,6 +20,7 @@ type Cat = { id: string; name: string; icon: string; color: string };
 
 function CategoriesPage() {
   const { family } = useAuth();
+  const reduce = useReducedMotion();
   const [cats, setCats] = useState<Cat[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [open, setOpen] = useState(false);
@@ -48,6 +51,7 @@ function CategoriesPage() {
 
   return (
     <div className="space-y-6">
+      <BackButton label="Back" />
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Categories</h1>
@@ -71,11 +75,20 @@ function CategoriesPage() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
         {cats.map((c, i) => (
-          <motion.div key={c.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-            <Link to="/category/$id" params={{ id: c.id }} className="card-glow block rounded-xl border border-border bg-card p-5">
+          <motion.div
+            key={c.id}
+            initial={reduce ? false : { opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.07, duration: 0.3 }}
+            whileHover={reduce ? undefined : "hover"}
+          >
+            <Link to="/category/$id" params={{ id: c.id }} className="card-glow group block rounded-xl border border-border bg-card p-5">
               <div className="flex items-center justify-between">
-                <span className="text-3xl">{c.icon}</span>
-                <span className="rounded-full bg-accent px-2 py-0.5 text-xs">{counts[c.id] || 0} items</span>
+                <CategoryIcon name={c.name} color={c.color} size={32} />
+                <motion.span
+                  variants={{ hover: { y: -3 } }}
+                  className="rounded-full bg-accent px-2 py-0.5 text-xs"
+                >{counts[c.id] || 0} items</motion.span>
               </div>
               <p className="mt-3 font-semibold">{c.name}</p>
               <div className="mt-3 h-1 rounded-full" style={{ background: c.color, opacity: 0.6 }} />

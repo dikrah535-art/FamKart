@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Plus, Edit2, Trash2, Check, Repeat } from "lucide-react";
+import { Plus, Edit2, Trash2, Check, Repeat } from "lucide-react";
+import { BackButton } from "@/components/BackButton";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -76,7 +77,7 @@ function CategoryPage() {
 
   return (
     <div className="space-y-6">
-      <Link to="/categories" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> All categories</Link>
+      <BackButton label="Back" />
       {cat && (
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex items-center gap-3">

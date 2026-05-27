@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle, Package, TrendingDown, Wallet, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { greet, inr } from "@/lib/format";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 export const Route = createFileRoute("/_app/dashboard")({ component: Dashboard });
 
@@ -17,6 +18,7 @@ type Cat = { id: string; name: string; icon: string; color: string };
 
 function Dashboard() {
   const { profile, family, user } = useAuth();
+  const reduce = useReducedMotion();
   const [items, setItems] = useState<Item[]>([]);
   const [cats, setCats] = useState<Cat[]>([]);
   const [purchasedTotal, setPurchasedTotal] = useState(0);
@@ -110,9 +112,16 @@ function Dashboard() {
             const stocked = inCat.filter((i) => i.status === "stocked").length;
             const pct = inCat.length ? Math.round((stocked / inCat.length) * 100) : 0;
             return (
-              <Link key={c.id} to="/category/$id" params={{ id: c.id }} className="card-glow block rounded-xl border border-border bg-card p-4">
+              <motion.div
+                key={c.id}
+                initial={reduce ? false : { opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 * cats.indexOf(c), duration: 0.3 }}
+                whileHover={reduce ? undefined : "hover"}
+              >
+              <Link to="/category/$id" params={{ id: c.id }} className="card-glow block rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-2xl">{c.icon}</span>
+                  <CategoryIcon name={c.name} color={c.color} size={26} />
                   <span className="rounded-full bg-accent px-2 py-0.5 text-xs">{inCat.length}</span>
                 </div>
                 <p className="mt-2 font-semibold">{c.name}</p>
@@ -120,6 +129,7 @@ function Dashboard() {
                   <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
                 </div>
               </Link>
+              </motion.div>
             );
           })}
         </div>
