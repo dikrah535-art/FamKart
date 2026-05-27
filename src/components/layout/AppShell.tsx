@@ -1,7 +1,7 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
-  Home, LayoutGrid, History, Wallet, Settings, LogOut, Menu, X, Copy,
+  Home, LayoutGrid, History, Wallet, Settings, LogOut, Menu, X, Copy, ShoppingCart,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -35,10 +35,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Mobile top bar */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur-xl">
         <div className="flex items-center gap-2">
-          <div className="grid h-7 w-7 place-items-center rounded-md bg-primary/15 text-primary">
-            <Home className="h-4 w-4" />
-          </div>
-          <span className="font-bold">NestList</span>
+          <ShoppingCart className="h-5 w-5" style={{ color: "#3ECF8E" }} />
+          <span className="font-bold text-white">FamKart</span>
         </div>
         <Button size="icon" variant="ghost" onClick={() => setOpen(true)}><Menu className="h-5 w-5" /></Button>
       </div>
@@ -64,17 +62,29 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       <main className="flex-1 min-w-0 pt-16 md:pt-0">
-        <motion.div
-          key={pathname}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
-          className="mx-auto max-w-7xl p-4 md:p-8"
-        >
-          {children}
-        </motion.div>
+        <div className="mx-auto max-w-7xl p-4 md:p-8">
+          <PageWrap pathname={pathname}>{children}</PageWrap>
+        </div>
       </main>
     </div>
+  );
+}
+
+function PageWrap({ pathname, children }: { pathname: string; children: ReactNode }) {
+  const reduce = useReducedMotion();
+  if (reduce) return <>{children}</>;
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={pathname}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+      >
+        {children}
+      </motion.div>
+    </AnimatePresence>
   );
 }
 
@@ -91,10 +101,8 @@ function SidebarInner({
   return (
     <>
       <div className="hidden md:flex items-center gap-2 px-5 py-5">
-        <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
-          <Home className="h-5 w-5" />
-        </div>
-        <span className="text-lg font-bold tracking-tight">NestList</span>
+        <ShoppingCart className="h-6 w-6" style={{ color: "#3ECF8E" }} />
+        <span className="text-lg font-bold tracking-tight text-white">FamKart</span>
         <span className="ml-1 h-2 w-2 rounded-full bg-primary shadow-[0_0_10px_currentColor]" />
       </div>
       <nav className="flex-1 space-y-1 px-3">
@@ -105,11 +113,11 @@ function SidebarInner({
               key={item.to}
               to={item.to}
               onClick={onNavigate}
-              className={`group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all ${
+              className={`group relative flex items-center gap-3 overflow-hidden rounded-lg px-3 py-2.5 text-sm transition-all hover:translate-x-1 hover:brightness-125 ${
                 active ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
               }`}
             >
-              <span className={`absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r bg-primary transition-all ${active ? "opacity-100" : "opacity-0 group-hover:opacity-60"}`} />
+              <span className={`absolute left-0 top-1/2 h-6 -translate-y-1/2 rounded-r bg-primary transition-all duration-200 ${active ? "w-[3px] opacity-100" : "w-0 opacity-0 group-hover:w-[3px] group-hover:opacity-80"}`} />
               <item.icon className="h-4 w-4" />
               {item.label}
             </Link>
@@ -123,21 +131,21 @@ function SidebarInner({
             <p className="truncate text-sm font-semibold">{family.name}</p>
             <button
               onClick={() => { navigator.clipboard.writeText(family.invite_code); toast.success("Invite code copied"); }}
-              className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-mono text-primary hover:bg-primary/20"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-mono text-primary transition-all hover:scale-105 hover:bg-primary/20 hover:shadow-[0_0_12px_rgba(62,207,142,0.4)]"
             >
               <Copy className="h-3 w-3" /> {family.invite_code}
             </button>
           </div>
         )}
-        <div className="flex items-center gap-2">
+        <div className="group/avatar flex items-center gap-2 transition hover:brightness-110">
           <div className="grid h-9 w-9 place-items-center rounded-full bg-secondary/20 text-sm font-semibold text-secondary">
             {initials}
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{name ?? "You"}</p>
           </div>
-          <Button size="icon" variant="ghost" onClick={onLogout} title="Sign out">
-            <LogOut className="h-4 w-4" />
+          <Button size="icon" variant="ghost" onClick={onLogout} title="Sign out" className="group/logout">
+            <LogOut className="h-4 w-4 transition-all group-hover/logout:translate-x-1 group-hover/logout:text-primary" />
           </Button>
         </div>
       </div>
