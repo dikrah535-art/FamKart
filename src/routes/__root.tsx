@@ -74,10 +74,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "NestList — Family Household Manager" },
+      { title: "FamKart — Family Household Manager" },
       { name: "description", content: "Organize your household, track essentials, and share lists with your family in real time." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "NestList — Family Household Manager" },
+      { property: "og:title", content: "FamKart — Family Household Manager" },
       { property: "og:description", content: "Organize your household, track essentials, and share lists with your family in real time." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
