@@ -2,8 +2,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
-import { useNavigate } from "@tanstack/react-router";
-import { lovable } from "@/integrations/lovable";
+import { supabase } from "@/integrations/supabase/client";
 
 function GoogleLogo() {
   return (
@@ -19,23 +18,17 @@ function GoogleLogo() {
 export function GoogleSignInButton({ label = "Continue with Google" }: { label?: string }) {
   const [loading, setLoading] = useState(false);
   const reduce = useReducedMotion();
-  const navigate = useNavigate();
 
   const onClick = async () => {
     setLoading(true);
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
-    if (result.error) {
+    if (error) {
       setLoading(false);
-      toast.error(result.error.message ?? "Google sign-in failed");
-      return;
+      toast.error(error.message ?? "Google sign-in failed");
     }
-    if (result.redirected) return;
-    // Session was set by the lovable broker (popup flow).
-    // Let the landing page route the user based on auth + family state.
-    toast.success("Signed in!");
-    navigate({ to: "/" });
   };
 
   return (

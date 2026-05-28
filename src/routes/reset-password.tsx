@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Loader2, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
@@ -24,6 +24,20 @@ function ResetPasswordPage() {
   const [pw, setPw] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    // Supabase fires PASSWORD_RECOVERY on mount when arriving from the email link.
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") setReady(true);
+    });
+    // Also check existing session in case the event already fired.
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) setReady(true);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
   const score = useMemo(() => strength(pw), [pw]);
   const labels = ["", "Weak", "Fair", "Good", "Strong"];
   const colors = ["bg-muted", "bg-destructive", "bg-warning", "bg-yellow-500", "bg-primary"];
