@@ -1,7 +1,5 @@
 {
-  "buildCommand": "bun run build",
-  "outputDirectory": "dist",
-  "framework": null,
+  "outputDirectory": "dist/client",
   "rewrites": [
     {
       "source": "/(.*)",
