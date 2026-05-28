@@ -13,6 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { friendlyError } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/_app/categories")({ component: CategoriesPage });
 
@@ -43,7 +44,7 @@ function CategoriesPage() {
   const create = async () => {
     if (!family || !name.trim()) return;
     const { error } = await supabase.from("categories").insert({ family_id: family.id, name: name.trim(), icon, color });
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(friendlyError(error));
     toast.success("Category added");
     setName(""); setIcon("📦"); setColor("#3ECF8E"); setOpen(false);
     load();

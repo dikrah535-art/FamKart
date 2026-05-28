@@ -12,6 +12,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
+import { friendlyError } from "@/lib/friendly-error";
 
 export type ItemRow = {
   id?: string;
@@ -72,7 +73,7 @@ export function ItemFormDrawer({
       ? await supabase.from("items").update(payload).eq("id", initial.id)
       : await supabase.from("items").insert(payload);
     setSaving(false);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(friendlyError(error));
     toast.success(initial?.id ? "Item updated" : "Item added");
     onClose();
   };

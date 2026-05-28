@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { friendlyError } from "@/lib/friendly-error";
 import { BackButton } from "@/components/BackButton";
 
 export const Route = createFileRoute("/_app/settings")({ component: SettingsPage });
@@ -27,13 +28,13 @@ function SettingsPage() {
   const saveProfile = async () => {
     if (!user) return;
     const { error } = await supabase.from("profiles").update({ full_name: name }).eq("id", user.id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(friendlyError(error));
     toast.success("Profile updated"); await refresh();
   };
   const saveFamily = async () => {
     if (!family) return;
     const { error } = await supabase.from("families").update({ name: famName }).eq("id", family.id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(friendlyError(error));
     toast.success("Family updated"); await refresh();
   };
   const regenerate = async () => {

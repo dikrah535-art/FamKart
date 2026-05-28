@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Loader2, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
+import { friendlyError } from "@/lib/friendly-error";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,7 +50,7 @@ function ResetPasswordPage() {
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password: pw });
     setLoading(false);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(friendlyError(error));
     toast.success("Password updated! Redirecting to login…");
     setTimeout(() => navigate({ to: "/login" }), 800);
   };

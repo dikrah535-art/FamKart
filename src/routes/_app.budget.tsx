@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { inr } from "@/lib/format";
 import { toast } from "sonner";
+import { friendlyError } from "@/lib/friendly-error";
 import { BackButton } from "@/components/BackButton";
 
 export const Route = createFileRoute("/_app/budget")({ component: BudgetPage });
@@ -69,7 +70,7 @@ function BudgetPage() {
     if (!family) return;
     const n = Number(budget) || 0;
     const { error } = await supabase.from("families").update({ monthly_budget: n }).eq("id", family.id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(friendlyError(error));
     toast.success("Budget updated");
     await refresh();
   };

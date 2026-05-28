@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { friendlyError } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/onboarding")({ component: OnboardingPage });
 
@@ -34,11 +35,11 @@ function OnboardingPage() {
       .insert({ name: familyName.trim(), created_by: user.id })
       .select()
       .single();
-    if (error || !fam) { setBusy(false); return toast.error(error?.message ?? "Failed"); }
+    if (error || !fam) { setBusy(false); return toast.error(friendlyError(error, "Could not create family")); }
     const { error: pe } = await supabase
       .from("profiles").update({ family_id: fam.id }).eq("id", user.id);
     setBusy(false);
-    if (pe) return toast.error(pe.message);
+    if (pe) return toast.error(friendlyError(pe, "Could not save your profile"));
     await refresh();
     toast.success(`Welcome to ${fam.name}!`);
     navigate({ to: "/dashboard" });
@@ -47,12 +48,13 @@ function OnboardingPage() {
   const joinFamily = async () => {
     if (!user || inviteCode.length !== 6) return;
     setBusy(true);
-    const { data: fam } = await supabase
-      .from("families").select("id,name").eq("invite_code", inviteCode.toUpperCase()).maybeSingle();
+    const { data: famRows } = await supabase
+      .rpc("find_family_by_invite", { _code: inviteCode.toUpperCase() });
+    const fam = Array.isArray(famRows) ? famRows[0] : famRows;
     if (!fam) { setBusy(false); return toast.error("Invalid invite code"); }
     const { error } = await supabase.from("profiles").update({ family_id: fam.id }).eq("id", user.id);
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(friendlyError(error, "Could not join family"));
     await refresh();
     toast.success(`Joined ${fam.name}!`);
     navigate({ to: "/dashboard" });

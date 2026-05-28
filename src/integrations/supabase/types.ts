@@ -254,6 +254,13 @@ export type Database = {
     }
     Functions: {
       current_family_id: { Args: never; Returns: string }
+      find_family_by_invite: {
+        Args: { _code: string }
+        Returns: {
+          id: string
+          name: string
+        }[]
+      }
       generate_invite_code: { Args: never; Returns: string }
     }
     Enums: {

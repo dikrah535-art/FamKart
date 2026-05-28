@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
+import { friendlyError } from "@/lib/friendly-error";
 import { supabase } from "@/integrations/supabase/client";
 
 function GoogleLogo() {
@@ -33,7 +34,7 @@ export function GoogleSignInButton({ label = "Continue with Google" }: { label?:
     });
     if (error) {
       setLoading(false);
-      toast.error(error.message ?? "Google sign-in failed");
+      toast.error(friendlyError(error, "Google sign-in failed"));
     }
   };
 
