@@ -11,43 +11,59 @@ function AuthCallback() {
 
   useEffect(() => {
     const run = async () => {
-      // Allow AuthProvider's consumeOAuthTokens to run first if tokens are in URL.
-      // Then read the session and route based on family membership.
-      let attempts = 0;
-      let session = null as Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"];
-      while (attempts < 20 && !session) {
-        const { data } = await supabase.auth.getSession();
-        session = data.session;
-        if (session) break;
-        await new Promise((r) => setTimeout(r, 150));
-        attempts++;
-      }
-      if (!session) {
-        toast.error("Sign-in failed. Please try again.");
+      try {
+        let { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error("Auth callback error:", error);
+          navigate({ to: "/login" });
+          return;
+        }
+        if (!session) {
+          const { data, error: exchangeError } =
+            await supabase.auth.exchangeCodeForSession(window.location.href);
+          if (exchangeError || !data.session) {
+            // Last-ditch: poll briefly for hash-based implicit flow handled by AuthProvider.
+            for (let i = 0; i < 10 && !session; i++) {
+              await new Promise((r) => setTimeout(r, 150));
+              const { data: s } = await supabase.auth.getSession();
+              session = s.session;
+            }
+            if (!session) {
+              navigate({ to: "/login" });
+              return;
+            }
+          } else {
+            session = data.session;
+          }
+        }
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const meta = user.user_metadata ?? {};
+          await supabase.from("profiles").upsert(
+            {
+              id: user.id,
+              full_name: meta.full_name ?? meta.name ?? null,
+              avatar_url: meta.avatar_url ?? meta.picture ?? null,
+            },
+            { onConflict: "id" },
+          );
+
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("family_id")
+            .eq("id", user.id)
+            .maybeSingle();
+
+          toast.success("Signed in!");
+          navigate({ to: profile?.family_id ? "/dashboard" : "/onboarding" });
+        } else {
+          navigate({ to: "/login" });
+        }
+      } catch (err) {
+        console.error("Callback failed:", err);
         navigate({ to: "/login" });
-        return;
       }
-
-      const user = session.user;
-      // Upsert profile from Google metadata.
-      const meta = user.user_metadata ?? {};
-      await supabase.from("profiles").upsert(
-        {
-          id: user.id,
-          full_name: meta.full_name ?? meta.name ?? null,
-          avatar_url: meta.avatar_url ?? meta.picture ?? null,
-        },
-        { onConflict: "id" },
-      );
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("family_id")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      toast.success("Signed in!");
-      navigate({ to: profile?.family_id ? "/dashboard" : "/onboarding" });
     };
     run();
   }, [navigate]);
