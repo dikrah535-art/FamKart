@@ -16,6 +16,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppHistoryRouteImport } from './routes/_app.history'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
@@ -55,6 +56,11 @@ const AppRoute = AppRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
@@ -100,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AppDashboardRoute
   '/history': typeof AppHistoryRoute
   '/settings': typeof AppSettingsRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/category/$id': typeof AppCategoryIdRoute
 }
 export interface FileRoutesByTo {
@@ -114,6 +121,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AppDashboardRoute
   '/history': typeof AppHistoryRoute
   '/settings': typeof AppSettingsRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/category/$id': typeof AppCategoryIdRoute
 }
 export interface FileRoutesById {
@@ -130,6 +138,7 @@ export interface FileRoutesById {
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/history': typeof AppHistoryRoute
   '/_app/settings': typeof AppSettingsRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/_app/category/$id': typeof AppCategoryIdRoute
 }
 export interface FileRouteTypes {
@@ -146,6 +155,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/history'
     | '/settings'
+    | '/auth/callback'
     | '/category/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -160,6 +170,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/history'
     | '/settings'
+    | '/auth/callback'
     | '/category/$id'
   id:
     | '__root__'
@@ -175,6 +186,7 @@ export interface FileRouteTypes {
     | '/_app/dashboard'
     | '/_app/history'
     | '/_app/settings'
+    | '/auth/callback'
     | '/_app/category/$id'
   fileRoutesById: FileRoutesById
 }
@@ -186,6 +198,7 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -237,6 +250,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/settings': {
@@ -312,6 +332,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
