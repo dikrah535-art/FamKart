@@ -1,32 +1,33 @@
-const fs = require('fs');
-const path = require('path');
+import { readdirSync, writeFileSync } from "fs";
+import { join } from "path";
 
-const clientDir = path.join(process.cwd(), 'dist/client');
-const assetsDir = path.join(clientDir, 'assets');
-const files = fs.readdirSync(assetsDir);
+const assetsDir = "dist/client/assets";
+const files = readdirSync(assetsDir);
 
-const cssFile = files.find(f => f.startsWith('styles-') && f.endsWith('.css'));
-const mainJs = files.find(f => 
-  f.startsWith('index-') && 
-  f.endsWith('.js') && 
-  fs.statSync(path.join(assetsDir, f)).size > 500000
-);
+const cssFile = files.find(f => f.endsWith(".css") && f.includes("styles"));
+const jsFile = files.find(f => f.endsWith(".js") && f.includes("index"));
+
+if (!jsFile) {
+  console.error("Could not find main JS bundle in dist/client/assets");
+  process.exit(1);
+}
 
 const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FamKart — Family Household Manager</title>
-    ${cssFile ? `<link rel="stylesheet" href="/assets/${cssFile}" />` : ''}
+    <title>FamKart</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    ${cssFile ? `<link rel="stylesheet" href="/assets/${cssFile}" />` : ""}
   </head>
   <body>
     <div id="root"></div>
-    ${mainJs ? `<script type="module" src="/assets/${mainJs}"></script>` : ''}
+    <script type="module" src="/assets/${jsFile}"></script>
   </body>
 </html>`;
 
-fs.writeFileSync(path.join(clientDir, 'index.html'), html);
-console.log('Generated dist/client/index.html');
-console.log('CSS:', cssFile);
-console.log('JS:', mainJs);
+writeFileSync("dist/client/index.html", html);
+console.log("Generated dist/client/index.html");
+console.log("  JS:", jsFile);
+console.log("  CSS:", cssFile ?? "none");
