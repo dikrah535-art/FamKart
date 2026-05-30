@@ -18,10 +18,12 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
+import { Route as AppNotebookRouteImport } from './routes/_app.notebook'
 import { Route as AppHistoryRouteImport } from './routes/_app.history'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppCategoriesRouteImport } from './routes/_app.categories'
 import { Route as AppBudgetRouteImport } from './routes/_app.budget'
+import { Route as AppNotebookEntryRouteImport } from './routes/_app.notebook.entry'
 import { Route as AppCategoryIdRouteImport } from './routes/_app.category.$id'
 
 const SignupRoute = SignupRouteImport.update({
@@ -68,6 +70,11 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const AppNotebookRoute = AppNotebookRouteImport.update({
+  id: '/notebook',
+  path: '/notebook',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppHistoryRoute = AppHistoryRouteImport.update({
   id: '/history',
   path: '/history',
@@ -88,6 +95,11 @@ const AppBudgetRoute = AppBudgetRouteImport.update({
   path: '/budget',
   getParentRoute: () => AppRoute,
 } as any)
+const AppNotebookEntryRoute = AppNotebookEntryRouteImport.update({
+  id: '/entry',
+  path: '/entry',
+  getParentRoute: () => AppNotebookRoute,
+} as any)
 const AppCategoryIdRoute = AppCategoryIdRouteImport.update({
   id: '/category/$id',
   path: '/category/$id',
@@ -105,9 +117,11 @@ export interface FileRoutesByFullPath {
   '/categories': typeof AppCategoriesRoute
   '/dashboard': typeof AppDashboardRoute
   '/history': typeof AppHistoryRoute
+  '/notebook': typeof AppNotebookRouteWithChildren
   '/settings': typeof AppSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/category/$id': typeof AppCategoryIdRoute
+  '/notebook/entry': typeof AppNotebookEntryRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -120,9 +134,11 @@ export interface FileRoutesByTo {
   '/categories': typeof AppCategoriesRoute
   '/dashboard': typeof AppDashboardRoute
   '/history': typeof AppHistoryRoute
+  '/notebook': typeof AppNotebookRouteWithChildren
   '/settings': typeof AppSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/category/$id': typeof AppCategoryIdRoute
+  '/notebook/entry': typeof AppNotebookEntryRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -137,9 +153,11 @@ export interface FileRoutesById {
   '/_app/categories': typeof AppCategoriesRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/history': typeof AppHistoryRoute
+  '/_app/notebook': typeof AppNotebookRouteWithChildren
   '/_app/settings': typeof AppSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/_app/category/$id': typeof AppCategoryIdRoute
+  '/_app/notebook/entry': typeof AppNotebookEntryRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -154,9 +172,11 @@ export interface FileRouteTypes {
     | '/categories'
     | '/dashboard'
     | '/history'
+    | '/notebook'
     | '/settings'
     | '/auth/callback'
     | '/category/$id'
+    | '/notebook/entry'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -169,9 +189,11 @@ export interface FileRouteTypes {
     | '/categories'
     | '/dashboard'
     | '/history'
+    | '/notebook'
     | '/settings'
     | '/auth/callback'
     | '/category/$id'
+    | '/notebook/entry'
   id:
     | '__root__'
     | '/'
@@ -185,9 +207,11 @@ export interface FileRouteTypes {
     | '/_app/categories'
     | '/_app/dashboard'
     | '/_app/history'
+    | '/_app/notebook'
     | '/_app/settings'
     | '/auth/callback'
     | '/_app/category/$id'
+    | '/_app/notebook/entry'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -266,6 +290,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/notebook': {
+      id: '/_app/notebook'
+      path: '/notebook'
+      fullPath: '/notebook'
+      preLoaderRoute: typeof AppNotebookRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/history': {
       id: '/_app/history'
       path: '/history'
@@ -294,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBudgetRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/notebook/entry': {
+      id: '/_app/notebook/entry'
+      path: '/entry'
+      fullPath: '/notebook/entry'
+      preLoaderRoute: typeof AppNotebookEntryRouteImport
+      parentRoute: typeof AppNotebookRoute
+    }
     '/_app/category/$id': {
       id: '/_app/category/$id'
       path: '/category/$id'
@@ -304,11 +342,24 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppNotebookRouteChildren {
+  AppNotebookEntryRoute: typeof AppNotebookEntryRoute
+}
+
+const AppNotebookRouteChildren: AppNotebookRouteChildren = {
+  AppNotebookEntryRoute: AppNotebookEntryRoute,
+}
+
+const AppNotebookRouteWithChildren = AppNotebookRoute._addFileChildren(
+  AppNotebookRouteChildren,
+)
+
 interface AppRouteChildren {
   AppBudgetRoute: typeof AppBudgetRoute
   AppCategoriesRoute: typeof AppCategoriesRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppHistoryRoute: typeof AppHistoryRoute
+  AppNotebookRoute: typeof AppNotebookRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
   AppCategoryIdRoute: typeof AppCategoryIdRoute
 }
@@ -318,6 +369,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCategoriesRoute: AppCategoriesRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppHistoryRoute: AppHistoryRoute,
+  AppNotebookRoute: AppNotebookRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,
   AppCategoryIdRoute: AppCategoryIdRoute,
 }
@@ -337,3 +389,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
