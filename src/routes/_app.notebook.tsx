@@ -8,6 +8,7 @@ import { BackButton } from "@/components/BackButton";
 import { Button } from "@/components/ui/button";
 import { inr } from "@/lib/format";
 import { toast } from "sonner";
+import { friendlyError } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/_app/notebook")({ component: NotebookHome });
 
@@ -50,7 +51,7 @@ function NotebookHome() {
         .select("id,entry_date,rows,total_amount")
         .eq("family_id", family.id)
         .order("entry_date", { ascending: false });
-      if (error) toast.error(error.message);
+      if (error) toast.error(friendlyError(error));
       setEntries((data as unknown as Entry[]) ?? []);
       setLoading(false);
     })();

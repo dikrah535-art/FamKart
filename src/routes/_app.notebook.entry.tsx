@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { BackButton } from "@/components/BackButton";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { friendlyError } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/_app/notebook/entry")({ component: NotebookEntryPage });
 
@@ -127,7 +128,7 @@ function NotebookEntryPage() {
       : await supabase.from("notebook_entries").upsert(payload, { onConflict: "family_id,entry_date" }).select("id").maybeSingle();
     setSaving(false);
     if (res.error) {
-      if (!silent) toast.error(res.error.message);
+      if (!silent) toast.error(friendlyError(res.error));
       return;
     }
     if (res.data?.id) setEntryId(res.data.id);
