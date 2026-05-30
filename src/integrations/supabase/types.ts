@@ -155,6 +155,42 @@ export type Database = {
           },
         ]
       }
+      notebook_entries: {
+        Row: {
+          created_at: string
+          entry_date: string
+          family_id: string
+          greeting: string | null
+          id: string
+          rows: Json
+          total_amount: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entry_date: string
+          family_id: string
+          greeting?: string | null
+          id?: string
+          rows?: Json
+          total_amount?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entry_date?: string
+          family_id?: string
+          greeting?: string | null
+          id?: string
+          rows?: Json
+          total_amount?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
