@@ -15,7 +15,9 @@ export const Route = createFileRoute("/login")({ component: LoginPage });
 
 function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("famkart:email") ?? "" : "",
+  );
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -25,8 +27,14 @@ function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) return toast.error(friendlyError(error));
+    try {
+      localStorage.setItem("famkart:email", email);
+    } catch {
+      /* ignore storage errors */
+    }
     toast.success("Welcome back!");
-    navigate({ to: "/" });
+    // Go to the app; the /_app guard forwards to /onboarding if no family yet.
+    navigate({ to: "/dashboard" });
   };
 
   return (

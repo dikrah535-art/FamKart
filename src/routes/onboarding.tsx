@@ -30,16 +30,14 @@ function OnboardingPage() {
   const createFamily = async () => {
     if (!user || !familyName.trim()) return;
     setBusy(true);
-    const { data: fam, error } = await supabase
-      .from("families")
-      .insert({ name: familyName.trim(), created_by: user.id })
-      .select()
-      .single();
-    if (error || !fam) { setBusy(false); return toast.error(friendlyError(error, "Could not create family")); }
-    const { error: pe } = await supabase
-      .from("profiles").update({ family_id: fam.id }).eq("id", user.id);
+    // SECURITY DEFINER RPC creates the family and attaches our profile in one
+    // transaction, avoiding the families RLS select-after-insert chicken-egg.
+    const { data, error } = await (supabase.rpc as any)("create_family", {
+      _name: familyName.trim(),
+    });
     setBusy(false);
-    if (pe) return toast.error(friendlyError(pe, "Could not save your profile"));
+    if (error || !data) return toast.error(friendlyError(error, "Could not create family"));
+    const fam = Array.isArray(data) ? data[0] : data;
     await refresh();
     toast.success(`Welcome to ${fam.name}!`);
     navigate({ to: "/dashboard" });
@@ -48,13 +46,20 @@ function OnboardingPage() {
   const joinFamily = async () => {
     if (!user || inviteCode.length !== 6) return;
     setBusy(true);
-    const { data: famRows } = await supabase
-      .rpc("find_family_by_invite", { _code: inviteCode.toUpperCase() });
-    const fam = Array.isArray(famRows) ? famRows[0] : famRows;
-    if (!fam) { setBusy(false); return toast.error("Invalid invite code"); }
-    const { error } = await supabase.from("profiles").update({ family_id: fam.id }).eq("id", user.id);
+    // SECURITY DEFINER RPC validates the code and attaches our profile in one
+    // transaction (no direct families/profiles write from the client).
+    const { data, error } = await (supabase.rpc as any)("join_family", {
+      _code: inviteCode.toUpperCase(),
+    });
     setBusy(false);
-    if (error) return toast.error(friendlyError(error, "Could not join family"));
+    if (error) {
+      if (String((error as { message?: string }).message ?? "").includes("INVALID_CODE")) {
+        return toast.error("Invalid invite code");
+      }
+      return toast.error(friendlyError(error, "Could not join family"));
+    }
+    const fam = Array.isArray(data) ? data[0] : data;
+    if (!fam) return toast.error("Invalid invite code");
     await refresh();
     toast.success(`Joined ${fam.name}!`);
     navigate({ to: "/dashboard" });

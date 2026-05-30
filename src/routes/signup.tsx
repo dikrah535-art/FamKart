@@ -18,22 +18,42 @@ function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 6) return toast.error("Password must be at least 6 characters");
+    if (password.length < 8) return toast.error("Password must be at least 8 characters");
+    if (password !== confirm) return toast.error("Passwords don't match");
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
         data: { full_name: name },
       },
     });
+    if (error) {
+      setLoading(false);
+      return toast.error(friendlyError(error));
+    }
+    try {
+      localStorage.setItem("famkart:email", email);
+    } catch {
+      /* ignore storage errors */
+    }
+    // If email confirmation is OFF, signUp already returns a session. If it's ON,
+    // try an immediate sign-in; if that's blocked, send them to confirm + login.
+    if (!data.session) {
+      const { data: si } = await supabase.auth.signInWithPassword({ email, password });
+      if (!si.session) {
+        setLoading(false);
+        toast.success("Account created! Check your email to confirm, then sign in.");
+        return navigate({ to: "/login" });
+      }
+    }
     setLoading(false);
-    if (error) return toast.error(friendlyError(error));
     toast.success("Account created!");
     navigate({ to: "/onboarding" });
   };
@@ -66,14 +86,21 @@ function SignupPage() {
             </div>
             <div className="space-y-2">
               <Label>Password</Label>
-              <PasswordInput required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" />
+              <PasswordInput required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" />
+            </div>
+            <div className="space-y-2">
+              <Label>Confirm password</Label>
+              <PasswordInput required value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Repeat password" />
+              {confirm && password !== confirm && (
+                <p className="text-xs text-destructive">Passwords don't match</p>
+              )}
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create account"}
             </Button>
           </form>
           <p className="mt-6 text-center text-sm text-muted-foreground">
-            Have an account? <Link to="/login" className="text-primary hover:underline">Sign in</Link>
+            Already have an account? <Link to="/login" className="text-primary hover:underline">Sign in</Link>
           </p>
         </div>
       </motion.div>

@@ -13,18 +13,28 @@ import { BackButton } from "@/components/BackButton";
 export const Route = createFileRoute("/forgot-password")({ component: ForgotPasswordPage });
 
 function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("famkart:email") ?? "" : "",
+  );
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErr(null);
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     setLoading(false);
-    if (error) return toast.error(friendlyError(error));
+    if (error) {
+      // Supabase intentionally does NOT reveal whether an email exists (to prevent
+      // account enumeration), so "no account found" can't be detected here. We map
+      // rate-limiting and fall back to a generic message.
+      setErr(friendlyError(error));
+      return;
+    }
     setSent(true);
   };
 
@@ -44,8 +54,9 @@ function ForgotPasswordPage() {
               <form onSubmit={submit} className="mt-6 space-y-4">
                 <div className="space-y-2">
                   <Label>Email</Label>
-                  <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@home.com" />
+                  <Input type="email" required value={email} onChange={(e) => { setEmail(e.target.value); setErr(null); }} placeholder="you@home.com" />
                 </div>
+                {err && <p className="text-sm text-destructive">{err}</p>}
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send reset link"}
                 </Button>
