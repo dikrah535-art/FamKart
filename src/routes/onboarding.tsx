@@ -104,7 +104,7 @@ function OnboardingPage() {
             <div className="mt-6 space-y-4">
               <div className="space-y-2">
                 <Label>Family name</Label>
-                <Input value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="The Sharma Family" />
+                <Input value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="The Gupta Family" />
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setMode("choose")}>Back</Button>
