@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { appOrigin } from "@/lib/app-url";
 import { BackButton } from "@/components/BackButton";
 
 export const Route = createFileRoute("/forgot-password")({ component: ForgotPasswordPage });
@@ -25,7 +26,7 @@ function ForgotPasswordPage() {
     setErr(null);
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${appOrigin()}/reset-password`,
     });
     setLoading(false);
     if (error) {

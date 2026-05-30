@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { appOrigin } from "@/lib/app-url";
 import { PasswordInput } from "@/components/PasswordInput";
 import { GoogleSignInButton, AuthDivider } from "@/components/GoogleSignInButton";
 
@@ -30,7 +31,7 @@ function SignupPage() {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${appOrigin()}/auth/callback`,
         data: { full_name: name },
       },
     });

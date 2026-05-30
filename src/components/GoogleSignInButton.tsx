@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 import { friendlyError } from "@/lib/friendly-error";
 import { supabase } from "@/integrations/supabase/client";
+import { appOrigin } from "@/lib/app-url";
 
 function GoogleLogo() {
   return (
@@ -25,7 +26,7 @@ export function GoogleSignInButton({ label = "Continue with Google" }: { label?:
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${appOrigin()}/auth/callback`,
         queryParams: {
           access_type: "offline",
           prompt: "select_account",
