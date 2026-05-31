@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { AlertTriangle, Package, TrendingDown, Wallet, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -19,6 +19,7 @@ type Cat = { id: string; name: string; icon: string; color: string };
 function Dashboard() {
   const { profile, family, user } = useAuth();
   const reduce = useReducedMotion();
+  const navigate = useNavigate();
   const [items, setItems] = useState<Item[]>([]);
   const [cats, setCats] = useState<Cat[]>([]);
   const [purchasedTotal, setPurchasedTotal] = useState(0);
@@ -50,11 +51,53 @@ function Dashboard() {
   const low = items.filter((i) => i.status === "low_stock").length;
   const budgetUsed = family?.monthly_budget ? Math.round((purchasedTotal / Number(family.monthly_budget)) * 100) : 0;
 
-  const stats = [
-    { label: "Items needed", value: needed, icon: Package, accent: "text-primary" },
-    { label: "Urgent", value: urgent, icon: AlertTriangle, accent: "text-destructive" },
-    { label: "Low stock", value: low, icon: TrendingDown, accent: "text-warning" },
-    { label: "Budget used", value: family?.monthly_budget ? `${budgetUsed}%` : inr(purchasedTotal), icon: Wallet, accent: "text-secondary" },
+  const stats: {
+    label: string;
+    value: string | number;
+    icon: typeof Package;
+    accent: string;
+    onClick: () => void;
+    iconVariants: Variants;
+    iconTransition: object;
+    hoverShadow?: string;
+  }[] = [
+    {
+      label: "Items needed",
+      value: needed,
+      icon: Package,
+      accent: "text-primary",
+      onClick: () => navigate({ to: "/categories", search: { filter: "needed" } }),
+      iconVariants: { hover: { y: [0, -4, 0] } },
+      iconTransition: { duration: 0.6, repeat: Infinity, ease: "easeInOut" },
+    },
+    {
+      label: "Urgent",
+      value: urgent,
+      icon: AlertTriangle,
+      accent: "text-destructive",
+      onClick: () => navigate({ to: "/categories", search: { filter: "urgent" } }),
+      iconVariants: { hover: { scale: [1, 1.15, 1], filter: ["drop-shadow(0 0 0px #EF4444)", "drop-shadow(0 0 8px #EF4444)", "drop-shadow(0 0 0px #EF4444)"] } },
+      iconTransition: { duration: 0.9, repeat: Infinity, ease: "easeInOut" },
+      hoverShadow: "0 0 20px #EF4444",
+    },
+    {
+      label: "Low stock",
+      value: low,
+      icon: TrendingDown,
+      accent: "text-warning",
+      onClick: () => navigate({ to: "/categories", search: { filter: "low_stock" } }),
+      iconVariants: { hover: { y: [0, 8, 0] } },
+      iconTransition: { duration: 0.9, repeat: Infinity, ease: "easeInOut" },
+    },
+    {
+      label: "Budget used",
+      value: family?.monthly_budget ? `${budgetUsed}%` : inr(purchasedTotal),
+      icon: Wallet,
+      accent: "text-secondary",
+      onClick: () => navigate({ to: "/budget" }),
+      iconVariants: { hover: { rotate: [-10, 10, -10] } },
+      iconTransition: { duration: 0.5, repeat: Infinity, ease: "easeInOut" },
+    },
   ];
 
   const urgentItems = items.filter((i) => i.priority === "urgent" && i.status !== "stocked").slice(0, 8);
@@ -70,17 +113,32 @@ function Dashboard() {
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {stats.map((s, i) => (
-          <motion.div
+          <motion.button
             key={s.label}
-            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-            className="card-glow rounded-xl border border-border bg-card p-4"
+            type="button"
+            onClick={s.onClick}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            whileHover={reduce ? undefined : { boxShadow: s.hoverShadow }}
+            className="card-glow rounded-xl border border-border bg-card p-4 text-left transition-transform hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            <div className="flex items-center justify-between">
+            <motion.div
+              initial="rest"
+              whileHover={reduce ? undefined : "hover"}
+              className="flex items-center justify-between"
+            >
               <span className="text-xs text-muted-foreground">{s.label}</span>
-              <s.icon className={`h-4 w-4 ${s.accent}`} />
-            </div>
+              <motion.span
+                variants={reduce ? undefined : s.iconVariants}
+                transition={s.iconTransition}
+                style={{ display: "inline-flex" }}
+              >
+                <s.icon className={`h-4 w-4 ${s.accent}`} />
+              </motion.span>
+            </motion.div>
             <p className="mt-2 text-2xl font-bold">{s.value}</p>
-          </motion.div>
+          </motion.button>
         ))}
       </section>
 

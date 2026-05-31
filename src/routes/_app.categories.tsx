@@ -15,13 +15,25 @@ import {
 import { toast } from "sonner";
 import { friendlyError } from "@/lib/friendly-error";
 
-export const Route = createFileRoute("/_app/categories")({ component: CategoriesPage });
+type CategoryFilter = "all" | "needed" | "urgent" | "low_stock";
+
+export const Route = createFileRoute("/_app/categories")({
+  component: CategoriesPage,
+  validateSearch: (search: Record<string, unknown>): { filter: CategoryFilter } => {
+    const f = search.filter;
+    return {
+      filter: f === "needed" || f === "urgent" || f === "low_stock" ? f : "all",
+    };
+  },
+});
 
 type Cat = { id: string; name: string; icon: string; color: string };
 
 function CategoriesPage() {
   const { family } = useAuth();
   const reduce = useReducedMotion();
+  const { filter } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [cats, setCats] = useState<Cat[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [open, setOpen] = useState(false);
@@ -33,13 +45,16 @@ function CategoriesPage() {
     if (!family) return;
     const { data } = await supabase.from("categories").select("*").eq("family_id", family.id).order("name");
     setCats((data as Cat[]) ?? []);
-    const { data: items } = await supabase.from("items").select("category_id").eq("family_id", family.id);
+    let q = supabase.from("items").select("category_id,status,priority").eq("family_id", family.id);
+    if (filter === "needed" || filter === "low_stock") q = q.eq("status", filter);
+    else if (filter === "urgent") q = q.eq("priority", "urgent").neq("status", "stocked");
+    const { data: items } = await q;
     const map: Record<string, number> = {};
     (items ?? []).forEach((i: { category_id: string | null }) => { if (i.category_id) map[i.category_id] = (map[i.category_id] || 0) + 1; });
     setCounts(map);
   };
 
-  useEffect(() => { load(); }, [family]);
+  useEffect(() => { load(); }, [family, filter]);
 
   const create = async () => {
     if (!family || !name.trim()) return;
@@ -74,8 +89,26 @@ function CategoriesPage() {
         </Dialog>
       </header>
 
+      <div className="flex flex-wrap items-center gap-2">
+        {(["all", "needed", "urgent", "low_stock"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => navigate({ search: { filter: f } })}
+            className={`rounded-full border px-3 py-1 text-xs capitalize transition ${
+              filter === f
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border text-muted-foreground hover:border-foreground/30"
+            }`}
+          >
+            {f.replace("_", " ")}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-        {cats.map((c, i) => (
+        {cats
+          .filter((c) => (filter === "all" ? true : (counts[c.id] ?? 0) > 0))
+          .map((c, i) => (
           <motion.div
             key={c.id}
             initial={reduce ? false : { opacity: 0, y: 20 }}
