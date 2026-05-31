@@ -87,7 +87,7 @@ function BudgetPage() {
         <div className="rounded-xl border border-border bg-card p-5">
           <Label className="text-xs text-muted-foreground">Monthly budget</Label>
           <div className="mt-2 flex items-center gap-2">
-            <Input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="0" />
+            <Input type="number" value={budget} onFocus={(e) => e.target.select()} onChange={(e) => setBudget(e.target.value)} placeholder="0" />
             <Button onClick={saveBudget}>Save</Button>
           </div>
           <p className="mt-3 text-2xl font-bold">{inr(budgetNum)}</p>
