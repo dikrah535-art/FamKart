@@ -234,6 +234,7 @@ function NotebookEntryPage() {
                             value={r.amount || ""}
                             onChange={(e) => updateRow(i, { amount: Number(e.target.value) || 0 })}
                             onBlur={() => dirty && save(true)}
+                            onFocus={(e) => e.target.select()}
                             onKeyDown={(e) => onCellKeyDown(e, i, 3, lastRow)}
                             className="w-full bg-transparent outline-none focus:bg-yellow-100/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
