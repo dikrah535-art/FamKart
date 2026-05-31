@@ -58,12 +58,12 @@ function CategoryPage() {
       family_id: family.id, item_name: it.name, category_id: id,
       purchased_by: user.id, quantity: it.quantity, unit: it.unit, cost: it.estimated_cost,
     });
-    if (it.is_recurring) {
-      await supabase.from("items").update({ status: "stocked" }).eq("id", it.id);
-    } else {
-      await supabase.from("items").delete().eq("id", it.id);
+    await supabase.from("items").update({ status: "stocked" }).eq("id", it.id);
+    if (it.estimated_cost && Number(it.estimated_cost) > 0 && family.monthly_budget != null) {
+      const next = Math.max(0, Number(family.monthly_budget) - Number(it.estimated_cost));
+      await supabase.from("families").update({ monthly_budget: next }).eq("id", family.id);
     }
-    toast.success(`${it.name} purchased`);
+    toast.success("Marked as bought!");
   };
 
   const remove = async (it: Item) => {
@@ -137,7 +137,16 @@ function CategoryPage() {
                 {it.notes && <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{it.notes}</p>}
                 {it.estimated_cost > 0 && <p className="mt-2 text-xs font-medium text-primary">{inr(it.estimated_cost)}</p>}
                 <div className="mt-3 flex items-center gap-1">
-                  <Button size="sm" variant="ghost" className="flex-1" onClick={() => purchase(it)}><Check className="mr-1 h-3 w-3" /> Bought</Button>
+                  {it.status !== "stocked" && (
+                    <Button
+                      size="sm"
+                      onClick={() => purchase(it)}
+                      className="flex-1 opacity-0 transition-opacity group-hover/item:opacity-100 focus-visible:opacity-100"
+                      style={{ background: "#3ECF8E", color: "#0a0a0a" }}
+                    >
+                      <Check className="mr-1 h-3 w-3" /> Bought
+                    </Button>
+                  )}
                   <Button size="icon" variant="ghost" onClick={() => { setEditing(it); setDrawerOpen(true); }}><Edit2 className="h-3.5 w-3.5" /></Button>
                   <Button size="icon" variant="ghost" onClick={() => remove(it)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                 </div>
