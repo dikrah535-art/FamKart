@@ -113,7 +113,7 @@ function CategoryPage() {
               <motion.div
                 key={it.id}
                 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.95 }}
-                className="card-glow rounded-xl border border-border bg-card p-4"
+                className="card-glow group/item rounded-xl border border-border bg-card p-4"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
