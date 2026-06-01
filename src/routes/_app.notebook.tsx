@@ -1,45 +1,43 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { BookOpen, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { BackButton } from "@/components/BackButton";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { inr } from "@/lib/format";
 import { toast } from "sonner";
 import { friendlyError } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/_app/notebook")({ component: NotebookHome });
 
-type Row = { item: string; qty: string; amount: number; category: string; notes: string };
+type DiaryRow = {
+  item?: string; qty?: string; unit?: string; status?: string; bought?: boolean;
+  price?: string | number; amount?: number; category?: string; notes?: string;
+};
 type Entry = {
   id: string;
   entry_date: string;
-  rows: Row[];
+  rows: DiaryRow[];
   total_amount: number;
 };
 
-function fmtDate(d: string) {
-  const dt = new Date(d + "T00:00:00");
-  return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+function parseDate(s: string) { return new Date(s + "T00:00:00"); }
+function toDateStr(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-
-function todayStr() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+function fmtDateLong(d: Date) {
+  return d.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
 }
 
 function NotebookHome() {
   const { family } = useAuth();
-  const navigate = useNavigate();
   const reduce = useReducedMotion();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [flipIdx, setFlipIdx] = useState<number | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const [flipDir, setFlipDir] = useState<1 | -1>(1);
 
   useEffect(() => {
@@ -52,183 +50,190 @@ function NotebookHome() {
         .eq("family_id", family.id)
         .order("entry_date", { ascending: false });
       if (error) toast.error(friendlyError(error));
-      setEntries((data as unknown as Entry[]) ?? []);
+      const list = (data as unknown as Entry[]) ?? [];
+      setEntries(list);
+      if (list.length) setSelected(list[0].entry_date);
       setLoading(false);
     })();
   }, [family]);
 
-  const openToday = () => navigate({ to: "/notebook/entry" });
+  const entryByDate = useMemo(() => {
+    const m: Record<string, Entry> = {};
+    for (const e of entries) m[e.entry_date] = e;
+    return m;
+  }, [entries]);
 
-  const openFlip = (i: number) => { setFlipDir(1); setFlipIdx(i); };
-  const close = () => setFlipIdx(null);
-  const next = () => { if (flipIdx === null) return; if (flipIdx > 0) { setFlipDir(-1); setFlipIdx(flipIdx - 1); } };
-  const prev = () => { if (flipIdx === null) return; if (flipIdx < entries.length - 1) { setFlipDir(1); setFlipIdx(flipIdx + 1); } };
+  const entryDates = useMemo(() => entries.map((e) => parseDate(e.entry_date)), [entries]);
+  const currentIdx = selected ? entries.findIndex((e) => e.entry_date === selected) : -1;
+  const current = currentIdx >= 0 ? entries[currentIdx] : null;
 
-  // Touch swipe for mobile
+  const older = () => {
+    if (currentIdx >= 0 && currentIdx < entries.length - 1) {
+      setFlipDir(1);
+      setSelected(entries[currentIdx + 1].entry_date);
+    }
+  };
+  const newer = () => {
+    if (currentIdx > 0) {
+      setFlipDir(-1);
+      setSelected(entries[currentIdx - 1].entry_date);
+    }
+  };
+
+  // Swipe gestures
   useEffect(() => {
-    if (flipIdx === null) return;
-    let startX = 0;
-    const ts = (e: TouchEvent) => { startX = e.touches[0].clientX; };
+    if (!current) return;
+    let sx = 0;
+    const ts = (e: TouchEvent) => { sx = e.touches[0].clientX; };
     const te = (e: TouchEvent) => {
-      const dx = e.changedTouches[0].clientX - startX;
-      if (Math.abs(dx) > 60) { if (dx < 0) next(); else prev(); }
+      const dx = e.changedTouches[0].clientX - sx;
+      if (Math.abs(dx) > 60) { if (dx < 0) newer(); else older(); }
     };
     window.addEventListener("touchstart", ts);
     window.addEventListener("touchend", te);
-    return () => { window.removeEventListener("touchstart", ts); window.removeEventListener("touchend", te); };
-  }, [flipIdx, entries.length]);
+    return () => {
+      window.removeEventListener("touchstart", ts);
+      window.removeEventListener("touchend", te);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, currentIdx, entries.length]);
 
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
         <BackButton />
-        <Button onClick={openToday} className="bg-primary text-primary-foreground hover:brightness-110">
-          <Plus className="h-4 w-4" /> New Entry
-        </Button>
+        <Link to="/dashboard">
+          <Button className="bg-primary text-primary-foreground hover:brightness-110">
+            <Plus className="h-4 w-4" /> Today's Page
+          </Button>
+        </Link>
       </div>
 
       <div className="mb-6">
         <h1 className="text-3xl font-bold tracking-tight">Family Notebook</h1>
-        <p className="text-muted-foreground">Your shared family diary.</p>
+        <p className="text-muted-foreground">Pick a date or flip through the pages.</p>
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-44 rounded-xl shimmer" />
-          ))}
-        </div>
+        <div className="h-72 rounded-xl shimmer" />
       ) : entries.length === 0 ? (
         <div className="rounded-xl border border-border bg-card/50 p-10 text-center">
           <BookOpen className="mx-auto h-10 w-10 text-primary" />
           <p className="mt-3 text-lg font-medium">No diary pages yet</p>
-          <p className="text-sm text-muted-foreground">Tap "New Entry" to start today's page.</p>
+          <p className="text-sm text-muted-foreground">Open the dashboard to start writing today's page.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-          {entries.map((e, i) => {
-            const first = e.rows?.[0]?.item || "Empty page";
-            return (
-              <motion.button
-                key={e.id}
-                whileHover={reduce ? undefined : { y: -4, rotateZ: -1 }}
-                transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                onClick={() => openFlip(i)}
-                className="group relative h-44 overflow-hidden rounded-r-xl text-left card-glow"
-                style={{
-                  background: "linear-gradient(135deg, #FDFAF0 0%, #F5EFD8 100%)",
-                  boxShadow: "0 6px 24px rgba(0,0,0,0.5), inset 6px 0 0 #8B5A2B",
-                  color: "#3a2a1a",
-                }}
-              >
-                <div className="flex h-full flex-col p-4 pl-7">
-                  <p className="font-[Caveat] text-xl font-semibold leading-tight">{fmtDate(e.entry_date)}</p>
-                  <p className="mt-2 line-clamp-2 text-sm opacity-80">{first}</p>
-                  <div className="mt-auto">
-                    <p className="text-xs uppercase tracking-wide opacity-60">Spent</p>
-                    <p className="font-[Caveat] text-2xl font-bold">{inr(Number(e.total_amount) || 0)}</p>
-                  </div>
-                </div>
-                <span className="pointer-events-none absolute right-0 bottom-0 h-10 w-10 origin-bottom-right rotate-0 transition-transform duration-300 group-hover:rotate-12"
-                  style={{ background: "linear-gradient(225deg, rgba(0,0,0,0.18), transparent 60%)" }} />
-              </motion.button>
-            );
-          })}
-        </div>
-      )}
+        <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+          <aside className="self-start rounded-xl border border-border bg-card p-3">
+            <Calendar
+              mode="single"
+              selected={selected ? parseDate(selected) : undefined}
+              onSelect={(d) => {
+                if (!d) return;
+                const ds = toDateStr(d);
+                if (entryByDate[ds]) {
+                  const idxNew = entries.findIndex((e) => e.entry_date === ds);
+                  setFlipDir(idxNew > currentIdx ? 1 : -1);
+                  setSelected(ds);
+                } else {
+                  toast("No entry on this day");
+                }
+              }}
+              modifiers={{ hasEntry: entryDates }}
+              modifiersClassNames={{ hasEntry: "bg-primary/15 text-primary font-semibold rounded-md" }}
+              className="pointer-events-auto p-0"
+            />
+            <p className="mt-3 text-xs text-muted-foreground">Highlighted days have a diary page.</p>
+          </aside>
 
-      {/* Flip viewer overlay */}
-      <AnimatePresence>
-        {flipIdx !== null && entries[flipIdx] && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-            onClick={close}
-            style={{ perspective: 1800 }}
-          >
-            <div className="relative w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
-              <AnimatePresence mode="wait" custom={flipDir}>
+          <div className="relative" style={{ perspective: 1800 }}>
+            <AnimatePresence mode="wait" custom={flipDir}>
+              {current && (
                 <motion.div
-                  key={entries[flipIdx].id}
+                  key={current.id}
                   custom={flipDir}
-                  initial={reduce ? { opacity: 0 } : { rotateY: flipDir === 1 ? -90 : 90, opacity: 0 }}
+                  initial={reduce ? { opacity: 0 } : { rotateY: flipDir === 1 ? -80 : 80, opacity: 0 }}
                   animate={reduce ? { opacity: 1 } : { rotateY: 0, opacity: 1 }}
-                  exit={reduce ? { opacity: 0 } : { rotateY: flipDir === 1 ? 90 : -90, opacity: 0 }}
+                  exit={reduce ? { opacity: 0 } : { rotateY: flipDir === 1 ? 80 : -80, opacity: 0 }}
                   transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
                   style={{ transformStyle: "preserve-3d", transformOrigin: "center" }}
                 >
-                  <DiaryPage entry={entries[flipIdx]} readOnly />
+                  <DiaryPage entry={current} />
                 </motion.div>
-              </AnimatePresence>
+              )}
+            </AnimatePresence>
 
-              <button
-                onClick={prev}
-                disabled={flipIdx >= entries.length - 1}
-                className="absolute left-0 top-1/2 -translate-x-12 -translate-y-1/2 rounded-full bg-background/80 p-2 hover:bg-background disabled:opacity-30"
-                aria-label="Previous (older)"
-              ><ChevronLeft className="h-6 w-6" /></button>
-              <button
-                onClick={next}
-                disabled={flipIdx <= 0}
-                className="absolute right-0 top-1/2 translate-x-12 -translate-y-1/2 rounded-full bg-background/80 p-2 hover:bg-background disabled:opacity-30"
-                aria-label="Next (newer)"
-              ><ChevronRight className="h-6 w-6" /></button>
+            <button onClick={older} disabled={currentIdx >= entries.length - 1}
+              className="absolute left-0 top-1/2 -translate-x-3 -translate-y-1/2 rounded-full border border-border bg-background/80 p-2 shadow-md backdrop-blur hover:bg-background disabled:opacity-30"
+              aria-label="Older page">
+              <ChevronLeft className="h-6 w-6" />
+            </button>
+            <button onClick={newer} disabled={currentIdx <= 0}
+              className="absolute right-0 top-1/2 translate-x-3 -translate-y-1/2 rounded-full border border-border bg-background/80 p-2 shadow-md backdrop-blur hover:bg-background disabled:opacity-30"
+              aria-label="Newer page">
+              <ChevronRight className="h-6 w-6" />
+            </button>
 
-              <p className="mt-4 text-center text-sm text-muted-foreground">
-                Page {entries.length - flipIdx} of {entries.length}
+            {current && (
+              <p className="mt-3 text-center text-sm text-muted-foreground">
+                Page {entries.length - currentIdx} of {entries.length}
               </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-/** Read-only diary page rendering, reused from the entry page styles */
-function DiaryPage({ entry }: { entry: Entry; readOnly: true }) {
-  const total = Number(entry.total_amount) || 0;
+function DiaryPage({ entry }: { entry: Entry }) {
+  const date = parseDate(entry.entry_date);
   return (
     <div
-      className="diary-page mx-auto max-h-[80vh] overflow-auto rounded-md p-6 md:p-10"
+      className="rounded-md p-6 md:p-8"
       style={{
         background: "#FDFAF0",
         color: "#2a2418",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.4), inset 0 0 80px rgba(139,90,43,0.06)",
+        boxShadow: "0 6px 24px rgba(0,0,0,0.5), inset 0 0 80px rgba(139,90,43,0.06)",
         backgroundImage:
           "repeating-linear-gradient(to bottom, transparent 0, transparent 31px, #E8E4D0 31px, #E8E4D0 32px)",
       }}
     >
-      <div className="relative pl-12">
-        <span className="pointer-events-none absolute top-0 bottom-0 left-10 w-[2px]" style={{ background: "#FF9999" }} />
-        <p className="font-[Caveat] text-3xl font-semibold">{fmtDate(entry.entry_date)}</p>
+      <div className="relative pl-10 md:pl-14">
+        <span className="pointer-events-none absolute top-0 bottom-0 left-8 md:left-12 w-[2px]" style={{ background: "#FF9999" }} />
+        <p className="font-[Caveat] text-3xl font-semibold">{fmtDateLong(date)}</p>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="text-left" style={{ color: "#555" }}>
-                <th className="py-2">#</th>
-                <th>Item</th>
-                <th>Qty</th>
-                <th>₹</th>
-                <th>Category</th>
-                <th>Notes</th>
+                <th className="py-2 w-8">#</th>
+                <th className="py-2">Item</th>
+                <th className="py-2 w-20">Qty</th>
+                <th className="py-2 w-20">Unit</th>
+                <th className="py-2 w-32">Status</th>
+                <th className="py-2 w-12 text-center">✓</th>
+                <th className="py-2 w-24">Price</th>
               </tr>
             </thead>
-            <tbody className="font-[Caveat] text-lg">
-              {(entry.rows || []).map((r, i) => (
-                <tr key={i} className="border-t" style={{ borderColor: "#E8E4D0" }}>
-                  <td className="py-1 pr-2">{i + 1}</td>
-                  <td className="pr-2">{r.item}</td>
-                  <td className="pr-2">{r.qty}</td>
-                  <td className="pr-2">₹ {r.amount || 0}</td>
-                  <td className="pr-2">{r.category}</td>
-                  <td>{r.notes}</td>
-                </tr>
-              ))}
+            <tbody className="font-[Caveat] text-xl">
+              {(entry.rows || []).map((r, i) => {
+                const price = r.price != null ? String(r.price) : r.amount != null ? String(r.amount) : "";
+                return (
+                  <tr key={i} className="border-t" style={{ borderColor: "#E8E4D0" }}>
+                    <td className="py-1 pr-2 opacity-70">{i + 1}</td>
+                    <td className="pr-2">{r.item ?? ""}</td>
+                    <td className="pr-2">{r.qty ?? ""}</td>
+                    <td className="pr-2">{r.unit ?? ""}</td>
+                    <td className="pr-2">{(r.status ?? "").replace("_", " ")}</td>
+                    <td className="text-center">{r.bought ? "✓" : ""}</td>
+                    <td className="pr-2">{price ? `₹ ${price}` : ""}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-        <p className="mt-6 font-[Caveat] text-xl">Total Spent: ₹ {total}</p>
+        <p className="mt-5 font-[Caveat] text-xl">Total Spent: {inr(Number(entry.total_amount) || 0)}</p>
       </div>
     </div>
   );

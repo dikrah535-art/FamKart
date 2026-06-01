@@ -13,7 +13,6 @@ import { inr } from "@/lib/format";
 import { toast } from "sonner";
 import { friendlyError } from "@/lib/friendly-error";
 import { BackButton } from "@/components/BackButton";
-import { selectOnFocus } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/budget")({ component: BudgetPage });
 
@@ -38,7 +37,7 @@ function BudgetPage() {
     setCats((c as Cat[]) ?? []);
     setHist((h as Hist[]) ?? []);
     setItems((it as Item[]) ?? []);
-    setBudget(String(family.monthly_budget ?? ""));
+    setBudget(family.monthly_budget ? String(family.monthly_budget) : "");
   };
   useEffect(() => { load(); }, [family]);
 
@@ -88,7 +87,7 @@ function BudgetPage() {
         <div className="rounded-xl border border-border bg-card p-5">
           <Label className="text-xs text-muted-foreground">Monthly budget</Label>
           <div className="mt-2 flex items-center gap-2">
-            <Input type="number" value={budget} {...selectOnFocus} onChange={(e) => setBudget(e.target.value)} placeholder="0" />
+            <Input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="0" />
             <Button onClick={saveBudget}>Save</Button>
           </div>
           <p className="mt-3 text-2xl font-bold">{inr(budgetNum)}</p>

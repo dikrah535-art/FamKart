@@ -4,8 +4,9 @@ import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { AlertTriangle, Package, TrendingDown, Wallet, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { greet, inr } from "@/lib/format";
+import { inr } from "@/lib/format";
 import { CategoryIcon } from "@/components/CategoryIcon";
+import { TodayDiary } from "@/components/TodayDiary";
 
 export const Route = createFileRoute("/_app/dashboard")({ component: Dashboard });
 
@@ -17,7 +18,7 @@ type Item = {
 type Cat = { id: string; name: string; icon: string; color: string };
 
 function Dashboard() {
-  const { profile, family, user } = useAuth();
+  const { family, user } = useAuth();
   const reduce = useReducedMotion();
   const navigate = useNavigate();
   const [items, setItems] = useState<Item[]>([]);
@@ -66,7 +67,7 @@ function Dashboard() {
       value: needed,
       icon: Package,
       accent: "text-primary",
-      onClick: () => navigate({ to: "/categories", search: { filter: "needed" } }),
+      onClick: () => navigate({ to: "/shopping" }),
       iconVariants: { hover: { y: [0, -4, 0] } },
       iconTransition: { duration: 0.6, repeat: Infinity, ease: "easeInOut" },
     },
@@ -75,7 +76,7 @@ function Dashboard() {
       value: urgent,
       icon: AlertTriangle,
       accent: "text-destructive",
-      onClick: () => navigate({ to: "/categories", search: { filter: "urgent" } }),
+      onClick: () => navigate({ to: "/shopping" }),
       iconVariants: { hover: { scale: [1, 1.15, 1], filter: ["drop-shadow(0 0 0px #EF4444)", "drop-shadow(0 0 8px #EF4444)", "drop-shadow(0 0 0px #EF4444)"] } },
       iconTransition: { duration: 0.9, repeat: Infinity, ease: "easeInOut" },
       hoverShadow: "0 0 20px #EF4444",
@@ -85,7 +86,7 @@ function Dashboard() {
       value: low,
       icon: TrendingDown,
       accent: "text-warning",
-      onClick: () => navigate({ to: "/categories", search: { filter: "low_stock" } }),
+      onClick: () => navigate({ to: "/shopping" }),
       iconVariants: { hover: { y: [0, 8, 0] } },
       iconTransition: { duration: 0.9, repeat: Infinity, ease: "easeInOut" },
     },
@@ -106,10 +107,7 @@ function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">{greet(profile?.full_name?.split(" ")[0])}</h1>
-        <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
-      </header>
+      <TodayDiary />
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {stats.map((s, i) => (
@@ -147,11 +145,15 @@ function Dashboard() {
           <h2 className="mb-3 text-lg font-semibold">Urgent items</h2>
           <div className="flex gap-3 overflow-x-auto pb-2">
             {urgentItems.map((i) => (
-              <div key={i.id} className="min-w-[200px] rounded-xl border border-destructive/40 bg-destructive/5 p-4">
+              <Link
+                key={i.id}
+                to="/shopping"
+                className="min-w-[200px] rounded-xl border border-destructive/40 bg-destructive/5 p-4 transition hover:-translate-y-0.5 hover:bg-destructive/10"
+              >
                 <span className="inline-flex rounded-full bg-destructive/20 px-2 py-0.5 text-[10px] uppercase tracking-wider text-destructive">Urgent</span>
                 <p className="mt-2 font-semibold">{i.name}</p>
                 <p className="text-xs text-muted-foreground capitalize">{i.status.replace("_", " ")}</p>
-              </div>
+              </Link>
             ))}
           </div>
         </section>
