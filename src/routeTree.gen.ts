@@ -17,6 +17,7 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AppShoppingRouteImport } from './routes/_app.shopping'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppNotebookRouteImport } from './routes/_app.notebook'
 import { Route as AppHistoryRouteImport } from './routes/_app.history'
@@ -64,6 +65,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppShoppingRoute = AppShoppingRouteImport.update({
+  id: '/shopping',
+  path: '/shopping',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof AppHistoryRoute
   '/notebook': typeof AppNotebookRouteWithChildren
   '/settings': typeof AppSettingsRoute
+  '/shopping': typeof AppShoppingRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/category/$id': typeof AppCategoryIdRoute
   '/notebook/entry': typeof AppNotebookEntryRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/history': typeof AppHistoryRoute
   '/notebook': typeof AppNotebookRouteWithChildren
   '/settings': typeof AppSettingsRoute
+  '/shopping': typeof AppShoppingRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/category/$id': typeof AppCategoryIdRoute
   '/notebook/entry': typeof AppNotebookEntryRoute
@@ -155,6 +163,7 @@ export interface FileRoutesById {
   '/_app/history': typeof AppHistoryRoute
   '/_app/notebook': typeof AppNotebookRouteWithChildren
   '/_app/settings': typeof AppSettingsRoute
+  '/_app/shopping': typeof AppShoppingRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/_app/category/$id': typeof AppCategoryIdRoute
   '/_app/notebook/entry': typeof AppNotebookEntryRoute
@@ -174,6 +183,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/notebook'
     | '/settings'
+    | '/shopping'
     | '/auth/callback'
     | '/category/$id'
     | '/notebook/entry'
@@ -191,6 +201,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/notebook'
     | '/settings'
+    | '/shopping'
     | '/auth/callback'
     | '/category/$id'
     | '/notebook/entry'
@@ -209,6 +220,7 @@ export interface FileRouteTypes {
     | '/_app/history'
     | '/_app/notebook'
     | '/_app/settings'
+    | '/_app/shopping'
     | '/auth/callback'
     | '/_app/category/$id'
     | '/_app/notebook/entry'
@@ -282,6 +294,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/shopping': {
+      id: '/_app/shopping'
+      path: '/shopping'
+      fullPath: '/shopping'
+      preLoaderRoute: typeof AppShoppingRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/settings': {
       id: '/_app/settings'
@@ -361,6 +380,7 @@ interface AppRouteChildren {
   AppHistoryRoute: typeof AppHistoryRoute
   AppNotebookRoute: typeof AppNotebookRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
+  AppShoppingRoute: typeof AppShoppingRoute
   AppCategoryIdRoute: typeof AppCategoryIdRoute
 }
 
@@ -371,6 +391,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppHistoryRoute: AppHistoryRoute,
   AppNotebookRoute: AppNotebookRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,
+  AppShoppingRoute: AppShoppingRoute,
   AppCategoryIdRoute: AppCategoryIdRoute,
 }
 
@@ -389,3 +410,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
