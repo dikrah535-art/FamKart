@@ -1,14 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { BookOpen, Trash2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/lib/auth-context";
-import { BackButton } from "@/components/BackButton";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { friendlyError } from "@/lib/friendly-error";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/_app/notebook/entry")({ component: NotebookEntryPage });
+// Diary editing now lives on the dashboard. Keep this route as a redirect so
+// any old links / bookmarks land in the right place.
+export const Route = createFileRoute("/_app/notebook/entry")({
+  beforeLoad: () => {
+    throw redirect({ to: "/dashboard" });
+  },
+});
 
 type Row = { item: string; qty: string; amount: number; category: string; notes: string };
 
