@@ -13,8 +13,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 import { friendlyError } from "@/lib/friendly-error";
-import { selectOnFocus } from "@/lib/utils";
-
 export type ItemRow = {
   id?: string;
   name: string;
@@ -114,7 +112,12 @@ export function ItemFormDrawer({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Quantity</Label>
-                  <Input type="number" min={0} step="0.1" value={form.quantity} {...selectOnFocus} onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })} />
+                  <Input
+                    type="number" min={0} step="0.1"
+                    value={form.quantity ? String(form.quantity) : ""}
+                    placeholder="0"
+                    onChange={(e) => setForm({ ...form, quantity: e.target.value === "" ? 0 : Number(e.target.value) })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Unit</Label>
@@ -155,7 +158,12 @@ export function ItemFormDrawer({
               </div>
               <div className="space-y-2">
                 <Label>Estimated cost (₹)</Label>
-                <Input type="number" min={0} step="0.01" value={form.estimated_cost} {...selectOnFocus} onChange={(e) => setForm({ ...form, estimated_cost: Number(e.target.value) })} />
+                <Input
+                  type="number" min={0} step="0.01"
+                  value={form.estimated_cost ? String(form.estimated_cost) : ""}
+                  placeholder="0"
+                  onChange={(e) => setForm({ ...form, estimated_cost: e.target.value === "" ? 0 : Number(e.target.value) })}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Notes</Label>

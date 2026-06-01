@@ -1,7 +1,7 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
-  Home, LayoutGrid, History, Wallet, Settings, LogOut, Menu, X, Copy, ShoppingCart, BookOpen,
+  Home, LayoutGrid, History, Wallet, Settings, LogOut, Menu, X, Copy, ShoppingCart, BookOpen, ShoppingBasket,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -10,6 +10,7 @@ import { toast } from "sonner";
 
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: Home },
+  { to: "/shopping", label: "Shopping", icon: ShoppingBasket },
   { to: "/categories", label: "Categories", icon: LayoutGrid },
   { to: "/history", label: "History", icon: History },
   { to: "/budget", label: "Budget", icon: Wallet },
