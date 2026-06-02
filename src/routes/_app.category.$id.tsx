@@ -153,6 +153,11 @@ function CategoryPage() {
       )}
 
       <ItemFormDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} initial={editing ?? undefined} defaultCategoryId={id} />
+      <BoughtDialog
+        open={!!boughtTarget}
+        onOpenChange={(o) => !o && setBoughtTarget(null)}
+        target={boughtTarget}
+      />
     </div>
   );
 }
