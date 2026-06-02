@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ItemFormDrawer, type ItemRow } from "@/components/ItemFormDrawer";
 import { StatusPill } from "./_app.dashboard";
-import { inr } from "@/lib/format";
 import { toast } from "sonner";
+import { BoughtDialog, type BoughtTarget } from "@/components/BoughtDialog";
 
 export const Route = createFileRoute("/_app/category/$id")({ component: CategoryPage });
 
@@ -27,6 +27,7 @@ function CategoryPage() {
   const [editing, setEditing] = useState<Item | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [members, setMembers] = useState<Record<string, string>>({});
+  const [boughtTarget, setBoughtTarget] = useState<BoughtTarget | null>(null);
 
   const load = async () => {
     if (!family) return;
@@ -52,18 +53,14 @@ function CategoryPage() {
     return () => { supabase.removeChannel(ch); };
   }, [family, id]);
 
-  const purchase = async (it: Item) => {
-    if (!family || !user) return;
-    await supabase.from("purchase_history").insert({
-      family_id: family.id, item_name: it.name, category_id: id,
-      purchased_by: user.id, quantity: it.quantity, unit: it.unit, cost: it.estimated_cost,
+  const openBought = (it: Item) => {
+    setBoughtTarget({
+      id: it.id,
+      name: it.name,
+      quantity: Number(it.quantity) || 1,
+      unit: it.unit,
+      category_id: id,
     });
-    await supabase.from("items").update({ status: "stocked" }).eq("id", it.id);
-    if (it.estimated_cost && Number(it.estimated_cost) > 0 && family.monthly_budget != null) {
-      const next = Math.max(0, Number(family.monthly_budget) - Number(it.estimated_cost));
-      await supabase.from("families").update({ monthly_budget: next }).eq("id", family.id);
-    }
-    toast.success("Marked as bought!");
   };
 
   const remove = async (it: Item) => {
@@ -135,12 +132,11 @@ function CategoryPage() {
                   )}
                 </div>
                 {it.notes && <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{it.notes}</p>}
-                {it.estimated_cost > 0 && <p className="mt-2 text-xs font-medium text-primary">{inr(it.estimated_cost)}</p>}
                 <div className="mt-3 flex items-center gap-1">
                   {it.status !== "stocked" && (
                     <Button
                       size="sm"
-                      onClick={() => purchase(it)}
+                      onClick={() => openBought(it)}
                       className="flex-1 opacity-0 transition-opacity group-hover/item:opacity-100 focus-visible:opacity-100"
                       style={{ background: "#3ECF8E", color: "#0a0a0a" }}
                     >
