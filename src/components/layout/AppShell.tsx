@@ -1,12 +1,13 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
-  Home, LayoutGrid, History, Wallet, Settings, LogOut, Menu, X, Copy, ShoppingCart, BookOpen, ShoppingBasket,
+  Home, LayoutGrid, History, Wallet, Settings, LogOut, Menu, X, Copy, ShoppingCart, BookOpen, ShoppingBasket, CheckSquare,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: Home },
@@ -15,6 +16,7 @@ const nav = [
   { to: "/history", label: "History", icon: History },
   { to: "/budget", label: "Budget", icon: Wallet },
   { to: "/notebook", label: "Notebook", icon: BookOpen },
+  { to: "/todo", label: "To-Do", icon: CheckSquare },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
@@ -23,6 +25,32 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [open, setOpen] = useState(false);
+  const [hasOpenTodo, setHasOpenTodo] = useState(false);
+
+  useEffect(() => {
+    if (!family) { setHasOpenTodo(false); return; }
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const check = async () => {
+      const { count } = await supabase
+        .from("todo_entries")
+        .select("id", { count: "exact", head: true })
+        .eq("family_id", family.id)
+        .eq("is_completed", false)
+        .gte("created_at", todayStart.toISOString());
+      setHasOpenTodo((count ?? 0) > 0);
+    };
+    check();
+    const ch = supabase
+      .channel(`todo-badge:${family.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "todo_entries", filter: `family_id=eq.${family.id}` },
+        () => check()
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [family]);
 
   const initials = (profile?.full_name || "U")
     .split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
@@ -31,7 +59,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen">
       {/* Sidebar (desktop) */}
       <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border bg-sidebar/60 backdrop-blur-xl">
-        <SidebarInner pathname={pathname} family={family} initials={initials} name={profile?.full_name} onLogout={async () => { await signOut(); navigate({ to: "/" }); }} />
+        <SidebarInner pathname={pathname} family={family} initials={initials} name={profile?.full_name} hasOpenTodo={hasOpenTodo} onLogout={async () => { await signOut(); navigate({ to: "/" }); }} />
       </aside>
 
       {/* Mobile top bar */}
@@ -55,7 +83,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Button size="icon" variant="ghost" onClick={() => setOpen(false)}><X className="h-5 w-5" /></Button>
             </div>
             <SidebarInner
-              pathname={pathname} family={family} initials={initials} name={profile?.full_name}
+              pathname={pathname} family={family} initials={initials} name={profile?.full_name} hasOpenTodo={hasOpenTodo}
               onLogout={async () => { await signOut(); navigate({ to: "/" }); }}
               onNavigate={() => setOpen(false)}
             />
@@ -91,12 +119,13 @@ function PageWrap({ pathname, children }: { pathname: string; children: ReactNod
 }
 
 function SidebarInner({
-  pathname, family, initials, name, onLogout, onNavigate,
+  pathname, family, initials, name, hasOpenTodo, onLogout, onNavigate,
 }: {
   pathname: string;
   family: { name: string; invite_code: string } | null;
   initials: string;
   name?: string | null;
+  hasOpenTodo: boolean;
   onLogout: () => void;
   onNavigate?: () => void;
 }) {
@@ -122,6 +151,9 @@ function SidebarInner({
               <span className={`absolute left-0 top-1/2 h-6 -translate-y-1/2 rounded-r bg-primary transition-all duration-200 ${active ? "w-[3px] opacity-100" : "w-0 opacity-0 group-hover:w-[3px] group-hover:opacity-80"}`} />
               <item.icon className="h-4 w-4" />
               {item.label}
+              {item.to === "/todo" && hasOpenTodo && (
+                <span className="ml-auto inline-flex h-2 w-2 rounded-full bg-[#3ECF8E] animate-pulse shadow-[0_0_8px_#3ECF8E]" />
+              )}
             </Link>
           );
         })}

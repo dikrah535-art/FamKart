@@ -5,10 +5,10 @@ import { Check, ShoppingBasket } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { BackButton } from "@/components/BackButton";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { friendlyError } from "@/lib/friendly-error";
+import { BoughtDialog, type BoughtTarget } from "@/components/BoughtDialog";
 
 export const Route = createFileRoute("/_app/shopping")({ component: ShoppingPage });
 
@@ -18,9 +18,9 @@ type Item = {
 };
 
 function ShoppingPage() {
-  const { family, user } = useAuth();
+  const { family } = useAuth();
   const [items, setItems] = useState<Item[]>([]);
-  const [prices, setPrices] = useState<Record<string, string>>({});
+  const [target, setTarget] = useState<BoughtTarget | null>(null);
 
   const load = async () => {
     if (!family) return;
@@ -36,11 +36,6 @@ function ShoppingPage() {
     const rank = (it: Item) => (it.priority === "urgent" ? 0 : it.status === "low_stock" ? 1 : 2);
     list.sort((a, b) => rank(a) - rank(b));
     setItems(list);
-    setPrices((p) => {
-      const next = { ...p };
-      for (const it of list) if (next[it.id] === undefined) next[it.id] = it.estimated_cost ? String(it.estimated_cost) : "";
-      return next;
-    });
   };
 
   useEffect(() => { load(); }, [family]);
@@ -52,20 +47,14 @@ function ShoppingPage() {
     return () => { supabase.removeChannel(ch); };
   }, [family]);
 
-  const buy = async (it: Item) => {
-    if (!family || !user) return;
-    const cost = Number(prices[it.id]) || 0;
-    const { error: hErr } = await supabase.from("purchase_history").insert({
-      family_id: family.id, item_name: it.name, category_id: it.category_id,
-      purchased_by: user.id, quantity: it.quantity, unit: it.unit, cost,
+  const openBought = (it: Item) => {
+    setTarget({
+      id: it.id,
+      name: it.name,
+      quantity: Number(it.quantity) || 1,
+      unit: it.unit,
+      category_id: it.category_id,
     });
-    if (hErr) { toast.error(friendlyError(hErr)); return; }
-    await supabase.from("items").update({ status: "stocked" }).eq("id", it.id);
-    if (cost > 0 && family.monthly_budget != null) {
-      const next = Math.max(0, Number(family.monthly_budget) - cost);
-      await supabase.from("families").update({ monthly_budget: next }).eq("id", family.id);
-    }
-    toast.success(`${it.name} marked as bought`);
   };
 
   return (
@@ -107,17 +96,8 @@ function ShoppingPage() {
                     </span>
                   </p>
                 </div>
-                <div className="col-span-7 md:col-span-4 flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">₹</span>
-                  <Input
-                    type="number" inputMode="decimal" placeholder="0"
-                    value={prices[it.id] ?? ""}
-                    onChange={(e) => setPrices((p) => ({ ...p, [it.id]: e.target.value }))}
-                    className="h-9"
-                  />
-                </div>
-                <div className="col-span-5 md:col-span-3 flex justify-end">
-                  <Button onClick={() => buy(it)} className="gap-1" style={{ background: "#3ECF8E", color: "#0a0a0a" }}>
+                <div className="col-span-12 md:col-span-7 flex justify-end">
+                  <Button onClick={() => openBought(it)} className="gap-1" style={{ background: "#3ECF8E", color: "#0a0a0a" }}>
                     <Check className="h-4 w-4" /> Bought
                   </Button>
                 </div>
@@ -126,6 +106,11 @@ function ShoppingPage() {
           </AnimatePresence>
         </div>
       )}
+      <BoughtDialog
+        open={!!target}
+        onOpenChange={(o) => !o && setTarget(null)}
+        target={target}
+      />
     </div>
   );
 }
