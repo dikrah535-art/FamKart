@@ -25,13 +25,12 @@ export type ItemRow = {
   notes: string;
   is_recurring: boolean;
   recur_interval: "daily" | "weekly" | "monthly" | null;
-  estimated_cost: number;
 };
 
 const empty: ItemRow = {
   name: "", category_id: null, status: "needed", quantity: 1, unit: "pcs",
   priority: "normal", assigned_to: null, notes: "", is_recurring: false,
-  recur_interval: null, estimated_cost: 0,
+  recur_interval: null,
 };
 
 export function ItemFormDrawer({
@@ -67,6 +66,7 @@ export function ItemFormDrawer({
       family_id: family.id,
       created_by: user.id,
       recur_interval: form.is_recurring ? form.recur_interval ?? "weekly" : null,
+      estimated_cost: 0,
     };
     const { error } = initial?.id
       ? await supabase.from("items").update(payload).eq("id", initial.id)
@@ -155,15 +155,6 @@ export function ItemFormDrawer({
                     {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.full_name ?? "Member"}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Estimated cost (₹)</Label>
-                <Input
-                  type="number" min={0} step="0.01"
-                  value={form.estimated_cost ? String(form.estimated_cost) : ""}
-                  placeholder="0"
-                  onChange={(e) => setForm({ ...form, estimated_cost: e.target.value === "" ? 0 : Number(e.target.value) })}
-                />
               </div>
               <div className="space-y-2">
                 <Label>Notes</Label>
