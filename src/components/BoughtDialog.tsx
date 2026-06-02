@@ -54,7 +54,7 @@ export function BoughtDialog({
       await refresh();
     }
     setSaving(false);
-    toast.success(`Marked as bought! \u20B9${cost} deducted from budget`);
+    toast.success(`Marked as bought! ₹${cost} deducted from budget`);
     onOpenChange(false);
     onDone?.();
   };
@@ -67,7 +67,7 @@ export function BoughtDialog({
         </DialogHeader>
         {target && <p className="text-sm text-muted-foreground">{target.name}</p>}
         <div className="space-y-2">
-          <Label>Actual price paid (\u20B9)</Label>
+          <Label>Actual price paid (₹)</Label>
           <Input
             type="number"
             inputMode="decimal"
