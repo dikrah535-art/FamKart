@@ -6,6 +6,7 @@ import { QuickAddFab } from "@/components/QuickAddFab";
 import { useEffect as useEffectRT } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { requeueRecurringItems } from "@/lib/recurring";
 
 export const Route = createFileRoute("/_app")({ component: AppLayout });
 
@@ -31,6 +32,12 @@ function AppLayout() {
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [family, user]);
+
+  // Re-queue recurring items whose interval has elapsed
+  useEffect(() => {
+    if (!family) return;
+    requeueRecurringItems(family.id);
+  }, [family]);
 
   if (loading || !user || !profile?.family_id) {
     return (
