@@ -1,19 +1,19 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { motion, useReducedMotion, type Variants } from "framer-motion";
-import { AlertTriangle, Package, TrendingDown, Wallet, ArrowRight } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import { ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { inr } from "@/lib/format";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import { TodayDiary } from "@/components/TodayDiary";
+import { requeueRecurringItems } from "@/lib/recurring";
 
 export const Route = createFileRoute("/_app/dashboard")({ component: Dashboard });
 
 type Item = {
   id: string; name: string; status: string; priority: string;
-  category_id: string | null; assigned_to: string | null;
-  estimated_cost: number; created_at: string;
+  category_id: string | null; assigned_to: string | null; created_at: string;
 };
 type Cat = { id: string; name: string; icon: string; color: string };
 
@@ -28,21 +28,48 @@ function Dashboard() {
   const load = async () => {
     if (!family) return;
     const [it, ct, ph] = await Promise.all([
-      supabase.from("items").select("id,name,status,priority,category_id,assigned_to,estimated_cost,created_at").eq("family_id", family.id).order("created_at", { ascending: false }),
+      supabase
+        .from("items")
+        .select("id,name,status,priority,category_id,assigned_to,created_at")
+        .eq("family_id", family.id)
+        .order("created_at", { ascending: false }),
       supabase.from("categories").select("id,name,icon,color").eq("family_id", family.id),
-      supabase.from("purchase_history").select("cost,purchased_at").eq("family_id", family.id).gte("purchased_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+      supabase
+        .from("purchase_history")
+        .select("cost,purchased_at")
+        .eq("family_id", family.id)
+        .gte(
+          "purchased_at",
+          new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()
+        ),
     ]);
     setItems((it.data as Item[]) ?? []);
     setCats((ct.data as Cat[]) ?? []);
-    setPurchasedTotal((ph.data ?? []).reduce((s, r: { cost: number | null }) => s + (Number(r.cost) || 0), 0));
+    setPurchasedTotal(
+      (ph.data ?? []).reduce(
+        (s, r: { cost: number | null }) => s + (Number(r.cost) || 0),
+        0
+      )
+    );
   };
 
   useEffect(() => { load(); }, [family]);
 
+  // Re-queue recurring items whose interval has elapsed
   useEffect(() => {
     if (!family) return;
-    const ch = supabase.channel(`dash:${family.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "items", filter: `family_id=eq.${family.id}` }, () => load())
+    requeueRecurringItems(family.id).then(load);
+  }, [family]);
+
+  useEffect(() => {
+    if (!family) return;
+    const ch = supabase
+      .channel(`dash:${family.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "items", filter: `family_id=eq.${family.id}` },
+        () => load()
+      )
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [family]);
@@ -50,59 +77,17 @@ function Dashboard() {
   const needed = items.filter((i) => i.status === "needed").length;
   const urgent = items.filter((i) => i.priority === "urgent" && i.status !== "stocked").length;
   const low = items.filter((i) => i.status === "low_stock").length;
-  const budgetUsed = family?.monthly_budget ? Math.round((purchasedTotal / Number(family.monthly_budget)) * 100) : 0;
+  const budgetUsed = family?.monthly_budget
+    ? Math.round((purchasedTotal / Number(family.monthly_budget)) * 100)
+    : 0;
+  const budgetLabel = family?.monthly_budget ? `${budgetUsed}%` : inr(purchasedTotal);
 
-  const stats: {
-    label: string;
-    value: string | number;
-    icon: typeof Package;
-    accent: string;
-    onClick: () => void;
-    iconVariants: Variants;
-    iconTransition: object;
-    hoverShadow?: string;
-  }[] = [
-    {
-      label: "Items needed",
-      value: needed,
-      icon: Package,
-      accent: "text-primary",
-      onClick: () => navigate({ to: "/shopping" }),
-      iconVariants: { hover: { y: [0, -4, 0] } },
-      iconTransition: { duration: 0.6, repeat: Infinity, ease: "easeInOut" },
-    },
-    {
-      label: "Urgent",
-      value: urgent,
-      icon: AlertTriangle,
-      accent: "text-destructive",
-      onClick: () => navigate({ to: "/shopping" }),
-      iconVariants: { hover: { scale: [1, 1.15, 1], filter: ["drop-shadow(0 0 0px #EF4444)", "drop-shadow(0 0 8px #EF4444)", "drop-shadow(0 0 0px #EF4444)"] } },
-      iconTransition: { duration: 0.9, repeat: Infinity, ease: "easeInOut" },
-      hoverShadow: "0 0 20px #EF4444",
-    },
-    {
-      label: "Low stock",
-      value: low,
-      icon: TrendingDown,
-      accent: "text-warning",
-      onClick: () => navigate({ to: "/shopping" }),
-      iconVariants: { hover: { y: [0, 8, 0] } },
-      iconTransition: { duration: 0.9, repeat: Infinity, ease: "easeInOut" },
-    },
-    {
-      label: "Budget used",
-      value: family?.monthly_budget ? `${budgetUsed}%` : inr(purchasedTotal),
-      icon: Wallet,
-      accent: "text-secondary",
-      onClick: () => navigate({ to: "/budget" }),
-      iconVariants: { hover: { rotate: [-10, 10, -10] } },
-      iconTransition: { duration: 0.5, repeat: Infinity, ease: "easeInOut" },
-    },
-  ];
-
-  const urgentItems = items.filter((i) => i.priority === "urgent" && i.status !== "stocked").slice(0, 8);
-  const myItems = items.filter((i) => i.assigned_to === user?.id && i.status !== "stocked").slice(0, 5);
+  const urgentItems = items
+    .filter((i) => i.priority === "urgent" && i.status !== "stocked")
+    .slice(0, 8);
+  const myItems = items
+    .filter((i) => i.assigned_to === user?.id && i.status !== "stocked")
+    .slice(0, 5);
   const recent = items.slice(0, 5);
 
   return (
@@ -110,34 +95,10 @@ function Dashboard() {
       <TodayDiary />
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {stats.map((s, i) => (
-          <motion.button
-            key={s.label}
-            type="button"
-            onClick={s.onClick}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-            whileHover={reduce ? undefined : { boxShadow: s.hoverShadow }}
-            className="card-glow rounded-xl border border-border bg-card p-4 text-left transition-transform hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <motion.div
-              initial="rest"
-              whileHover={reduce ? undefined : "hover"}
-              className="flex items-center justify-between"
-            >
-              <span className="text-xs text-muted-foreground">{s.label}</span>
-              <motion.span
-                variants={reduce ? undefined : s.iconVariants}
-                transition={s.iconTransition}
-                style={{ display: "inline-flex" }}
-              >
-                <s.icon className={`h-4 w-4 ${s.accent}`} />
-              </motion.span>
-            </motion.div>
-            <p className="mt-2 text-2xl font-bold">{s.value}</p>
-          </motion.button>
-        ))}
+        <NeededStat value={needed} onClick={() => navigate({ to: "/items", search: { tab: "needed" } })} reduce={!!reduce} />
+        <UrgentStat value={urgent} onClick={() => navigate({ to: "/items", search: { tab: "urgent" } })} reduce={!!reduce} />
+        <LowStockStat value={low} onClick={() => navigate({ to: "/items", search: { tab: "low_stock" } })} reduce={!!reduce} />
+        <BudgetStat value={budgetLabel} onClick={() => navigate({ to: "/budget" })} reduce={!!reduce} />
       </section>
 
       {urgentItems.length > 0 && (
@@ -147,12 +108,17 @@ function Dashboard() {
             {urgentItems.map((i) => (
               <Link
                 key={i.id}
-                to="/shopping"
+                to="/items"
+                search={{ tab: "urgent" }}
                 className="min-w-[200px] rounded-xl border border-destructive/40 bg-destructive/5 p-4 transition hover:-translate-y-0.5 hover:bg-destructive/10"
               >
-                <span className="inline-flex rounded-full bg-destructive/20 px-2 py-0.5 text-[10px] uppercase tracking-wider text-destructive">Urgent</span>
+                <span className="inline-flex rounded-full bg-destructive/20 px-2 py-0.5 text-[10px] uppercase tracking-wider text-destructive">
+                  Urgent
+                </span>
                 <p className="mt-2 font-semibold">{i.name}</p>
-                <p className="text-xs text-muted-foreground capitalize">{i.status.replace("_", " ")}</p>
+                <p className="text-xs text-muted-foreground capitalize">
+                  {i.status.replace("_", " ")}
+                </p>
               </Link>
             ))}
           </div>
@@ -177,18 +143,21 @@ function Dashboard() {
                 initial={reduce ? false : { opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.05 * cats.indexOf(c), duration: 0.3 }}
-                whileHover={reduce ? undefined : "hover"}
               >
-              <Link to="/category/$id" params={{ id: c.id }} className="card-glow block rounded-xl border border-border bg-card p-4">
-                <div className="flex items-center justify-between">
-                  <CategoryIcon name={c.name} color={c.color} size={26} />
-                  <span className="rounded-full bg-accent px-2 py-0.5 text-xs">{inCat.length}</span>
-                </div>
-                <p className="mt-2 font-semibold">{c.name}</p>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-accent">
-                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-                </div>
-              </Link>
+                <Link
+                  to="/category/$id"
+                  params={{ id: c.id }}
+                  className="card-glow block rounded-xl border border-border bg-card p-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <CategoryIcon name={c.name} color={c.color} size={26} />
+                    <span className="rounded-full bg-accent px-2 py-0.5 text-xs">{inCat.length}</span>
+                  </div>
+                  <p className="mt-2 font-semibold">{c.name}</p>
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-accent">
+                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                </Link>
               </motion.div>
             );
           })}
@@ -240,5 +209,308 @@ export function StatusPill({ status }: { status: string }) {
     low_stock: "bg-warning/15 text-warning",
     stocked: "bg-primary/15 text-primary",
   };
-  return <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${map[status] ?? "bg-accent"}`}>{status.replace("_", " ")}</span>;
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${
+        map[status] ?? "bg-accent"
+      }`}
+    >
+      {status.replace("_", " ")}
+    </span>
+  );
+}
+
+/* ============ Animated Stat Cards ============ */
+
+function StatShell({
+  label, value, onClick, glow, hovering, setHovering, children,
+}: {
+  label: string; value: number | string; onClick: () => void; glow: string;
+  hovering: boolean; setHovering: (b: boolean) => void; children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+      className="relative overflow-hidden rounded-xl border bg-card p-4 text-left transition-all hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      style={{
+        borderColor: hovering ? glow : "var(--color-border)",
+        boxShadow: hovering ? `0 0 20px ${glow}66` : undefined,
+        minHeight: 110,
+      }}
+    >
+      {children}
+      <div className="relative">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <p className="mt-2 text-2xl font-bold">{value}</p>
+      </div>
+    </button>
+  );
+}
+
+function NeededStat({ value, onClick, reduce }: { value: number; onClick: () => void; reduce: boolean }) {
+  const [h, setH] = useState(false);
+  return (
+    <StatShell label="Items needed" value={value} onClick={onClick} glow="#3ECF8E" hovering={h} setHovering={setH}>
+      <div className="absolute right-3 top-3 h-9 w-11" style={{ perspective: 90 }}>
+        {/* Box body */}
+        <div
+          className="absolute inset-x-0 bottom-0 h-5 rounded-sm border"
+          style={{ background: "rgba(62,207,142,0.18)", borderColor: "#3ECF8E" }}
+        />
+        {/* Left flap */}
+        <motion.div
+          className="absolute left-0 top-1 h-3 w-1/2 border"
+          style={{
+            background: "rgba(62,207,142,0.3)",
+            borderColor: "#3ECF8E",
+            transformOrigin: "right center",
+          }}
+          animate={!reduce && h ? { rotateY: [0, -130, -130, 0] } : { rotateY: 0 }}
+          transition={{ duration: 1.8, repeat: h ? Infinity : 0, times: [0, 0.35, 0.7, 1], ease: "easeInOut" }}
+        />
+        {/* Right flap */}
+        <motion.div
+          className="absolute right-0 top-1 h-3 w-1/2 border"
+          style={{
+            background: "rgba(62,207,142,0.3)",
+            borderColor: "#3ECF8E",
+            transformOrigin: "left center",
+          }}
+          animate={!reduce && h ? { rotateY: [0, 130, 130, 0] } : { rotateY: 0 }}
+          transition={{ duration: 1.8, repeat: h ? Infinity : 0, times: [0, 0.35, 0.7, 1], ease: "easeInOut" }}
+        />
+      </div>
+    </StatShell>
+  );
+}
+
+function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => void; reduce: boolean }) {
+  const [h, setH] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (!h || reduce) return;
+    const c = canvasRef.current;
+    if (!c) return;
+    const dpr = window.devicePixelRatio || 1;
+    const resize = () => {
+      const r = c.getBoundingClientRect();
+      c.width = r.width * dpr;
+      c.height = r.height * dpr;
+    };
+    resize();
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    type Ring = { t: number; max: number };
+    const rings: Ring[] = [];
+    let last = performance.now();
+    let lastSpawn = -Infinity;
+    let raf = 0;
+    const LIFE = 1800;
+    const SPAWN = 1100;
+    const loop = (now: number) => {
+      const dt = now - last;
+      last = now;
+      ctx.clearRect(0, 0, c.width, c.height);
+      const w = c.width / dpr;
+      const hh = c.height / dpr;
+      if (now - lastSpawn > SPAWN) {
+        rings.push({ t: 0, max: Math.hypot(w, hh) });
+        lastSpawn = now;
+      }
+      const cx = (w - 14) * dpr;
+      const cy = 14 * dpr;
+      for (let i = rings.length - 1; i >= 0; i--) {
+        const r = rings[i];
+        r.t += dt;
+        const p = r.t / LIFE;
+        if (p >= 1) { rings.splice(i, 1); continue; }
+        const radius = p * r.max * dpr;
+        const alpha = (1 - p) * 0.65;
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        g.addColorStop(0, `rgba(239,68,68,${alpha})`);
+        g.addColorStop(1, "rgba(239,68,68,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    const ro = new ResizeObserver(resize);
+    ro.observe(c);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+  }, [h, reduce]);
+
+  return (
+    <StatShell label="Urgent" value={value} onClick={onClick} glow="#EF4444" hovering={h} setHovering={setH}>
+      <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
+      <svg
+        width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EF4444"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        className="absolute right-3 top-3"
+      >
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+    </StatShell>
+  );
+}
+
+function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () => void; reduce: boolean }) {
+  const [h, setH] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (reduce) return;
+    const c = canvasRef.current;
+    if (!c) return;
+    const dpr = window.devicePixelRatio || 1;
+    const resize = () => {
+      const r = c.getBoundingClientRect();
+      c.width = r.width * dpr;
+      c.height = r.height * dpr;
+    };
+    resize();
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    const SEGMENTS = 8;
+    const baseY = (i: number) => (i / (SEGMENTS - 1)) * 0.8 + 0.05;
+    const t0 = performance.now();
+    let raf = 0;
+    const draw = (now: number) => {
+      const w = c.width;
+      const hh = c.height;
+      ctx.clearRect(0, 0, w, hh);
+      // grid
+      ctx.strokeStyle = "rgba(245,158,11,0.12)";
+      ctx.lineWidth = 1 * dpr;
+      for (let i = 1; i < 4; i++) {
+        const y = (i / 4) * hh;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+      const elapsed = (now - t0) / 1000;
+      const cycle = 4;
+      const p = Math.min(1, (elapsed % cycle) / (cycle * 0.85));
+      const points: [number, number][] = [];
+      for (let i = 0; i < SEGMENTS; i++) {
+        const wob = Math.sin(i * 1.7) * 0.06;
+        const x = (i / (SEGMENTS - 1)) * w;
+        const y = (baseY(i) + wob) * hh;
+        points.push([x, y]);
+      }
+      const totalLen = points.length - 1;
+      const drawUpTo = totalLen * p;
+      ctx.strokeStyle = "#F59E0B";
+      ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(points[0][0], points[0][1]);
+      let tipX = points[0][0];
+      let tipY = points[0][1];
+      for (let i = 1; i < points.length; i++) {
+        if (i <= drawUpTo) {
+          ctx.lineTo(points[i][0], points[i][1]);
+          tipX = points[i][0];
+          tipY = points[i][1];
+        } else {
+          const frac = drawUpTo - (i - 1);
+          if (frac > 0) {
+            const x = points[i - 1][0] + (points[i][0] - points[i - 1][0]) * frac;
+            const y = points[i - 1][1] + (points[i][1] - points[i - 1][1]) * frac;
+            ctx.lineTo(x, y);
+            tipX = x;
+            tipY = y;
+          }
+          break;
+        }
+      }
+      ctx.stroke();
+      ctx.shadowColor = "#F59E0B";
+      ctx.shadowBlur = 8 * dpr;
+      ctx.fillStyle = "#F59E0B";
+      const a = 7 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(tipX - a, tipY - a);
+      ctx.lineTo(tipX + a, tipY - a);
+      ctx.lineTo(tipX, tipY + a);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    const ro = new ResizeObserver(resize);
+    ro.observe(c);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+  }, [reduce]);
+
+  return (
+    <StatShell label="Low stock" value={value} onClick={onClick} glow="#F59E0B" hovering={h} setHovering={setH}>
+      <canvas
+        ref={canvasRef}
+        className="pointer-events-none absolute"
+        style={{ right: 0, bottom: 0, width: "60%", height: "65%" }}
+      />
+    </StatShell>
+  );
+}
+
+function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => void; reduce: boolean }) {
+  const [h, setH] = useState(false);
+  return (
+    <StatShell label="Budget used" value={value} onClick={onClick} glow="#7C3AED" hovering={h} setHovering={setH}>
+      <div className="absolute right-3 top-3 h-9 w-11" style={{ perspective: 90 }}>
+        {/* Wallet body */}
+        <div
+          className="absolute inset-x-0 bottom-0 h-6 rounded-sm"
+          style={{ background: "#7C3AED" }}
+        />
+        {/* Wallet flap */}
+        <motion.div
+          className="absolute inset-x-0 top-0 h-4 rounded-t-sm origin-bottom"
+          style={{ background: "#9F67FF" }}
+          animate={!reduce && h ? { rotateX: -150 } : { rotateX: 0 }}
+          transition={{ duration: 0.6, ease: "easeInOut" }}
+        />
+        {/* Rain notes (after flap opens) */}
+        {!reduce && h && Array.from({ length: 4 }).map((_, i) => (
+          <motion.div
+            key={i}
+            className="pointer-events-none absolute grid place-items-center rounded-sm text-[8px] font-bold"
+            style={{
+              width: 14, height: 9,
+              background: "#1a3d2b",
+              border: "1px solid #3ECF8E",
+              color: "#3ECF8E",
+              left: 2 + (i % 2) * 12,
+              top: 6,
+            }}
+            initial={{ y: 0, opacity: 0, rotate: 0 }}
+            animate={{
+              y: 40,
+              opacity: [0, 1, 1, 0],
+              rotate: (i % 2 === 0 ? 1 : -1) * 30,
+            }}
+            transition={{
+              delay: 0.5 + i * 0.35,
+              duration: 1.6,
+              repeat: Infinity,
+              repeatDelay: 0.6,
+              ease: "easeIn",
+            }}
+          >
+            ₹
+          </motion.div>
+        ))}
+      </div>
+    </StatShell>
+  );
 }
