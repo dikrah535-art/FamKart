@@ -15,7 +15,7 @@ export const Route = createFileRoute("/_app/notebook")({ component: NotebookHome
 
 type DiaryRow = {
   item?: string; qty?: string; unit?: string; status?: string; bought?: boolean;
-  price?: string | number; amount?: number; category?: string; notes?: string;
+  price?: string | number; amount?: number;
 };
 type Entry = {
   id: string;
@@ -80,7 +80,6 @@ function NotebookHome() {
     }
   };
 
-  // Swipe gestures
   useEffect(() => {
     if (!current) return;
     let sx = 0;
@@ -163,14 +162,20 @@ function NotebookHome() {
               )}
             </AnimatePresence>
 
-            <button onClick={older} disabled={currentIdx >= entries.length - 1}
+            <button
+              onClick={older}
+              disabled={currentIdx >= entries.length - 1}
               className="absolute left-0 top-1/2 -translate-x-3 -translate-y-1/2 rounded-full border border-border bg-background/80 p-2 shadow-md backdrop-blur hover:bg-background disabled:opacity-30"
-              aria-label="Older page">
+              aria-label="Older page"
+            >
               <ChevronLeft className="h-6 w-6" />
             </button>
-            <button onClick={newer} disabled={currentIdx <= 0}
+            <button
+              onClick={newer}
+              disabled={currentIdx <= 0}
               className="absolute right-0 top-1/2 translate-x-3 -translate-y-1/2 rounded-full border border-border bg-background/80 p-2 shadow-md backdrop-blur hover:bg-background disabled:opacity-30"
-              aria-label="Newer page">
+              aria-label="Newer page"
+            >
               <ChevronRight className="h-6 w-6" />
             </button>
 
@@ -188,52 +193,61 @@ function NotebookHome() {
 
 function DiaryPage({ entry }: { entry: Entry }) {
   const date = parseDate(entry.entry_date);
+  const PAPER = "#1C1814";
+  const TEXT = "#E8D5B0";
+  const RULE = "rgba(255,220,150,0.08)";
+  const RULE_BORDER = "rgba(255,220,150,0.12)";
+  const MARGIN = "rgba(239,68,68,0.3)";
+  const HEADER_BG = "rgba(255,220,150,0.15)";
   return (
     <div
-      className="rounded-md p-6 md:p-8"
+      className="rounded-md border p-6 md:p-8"
       style={{
-        background: "#FDFAF0",
-        color: "#2a2418",
-        boxShadow: "0 6px 24px rgba(0,0,0,0.5), inset 0 0 80px rgba(139,90,43,0.06)",
-        backgroundImage:
-          "repeating-linear-gradient(to bottom, transparent 0, transparent 31px, #E8E4D0 31px, #E8E4D0 32px)",
+        background: PAPER,
+        color: TEXT,
+        borderColor: "rgba(255,220,150,0.1)",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+        backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent 31px, ${RULE} 31px, ${RULE} 32px)`,
       }}
     >
       <div className="relative pl-10 md:pl-14">
-        <span className="pointer-events-none absolute top-0 bottom-0 left-8 md:left-12 w-[2px]" style={{ background: "#FF9999" }} />
+        <span
+          className="pointer-events-none absolute top-0 bottom-0 left-8 md:left-12 w-[2px]"
+          style={{ background: MARGIN }}
+        />
         <p className="font-[Caveat] text-3xl font-semibold">{fmtDateLong(date)}</p>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[640px] text-sm" style={{ fontFamily: "Inter, system-ui, sans-serif", color: TEXT }}>
             <thead>
-              <tr className="text-left" style={{ color: "#555" }}>
-                <th className="py-2 w-8">#</th>
-                <th className="py-2">Item</th>
-                <th className="py-2 w-20">Qty</th>
-                <th className="py-2 w-20">Unit</th>
-                <th className="py-2 w-32">Status</th>
-                <th className="py-2 w-12 text-center">✓</th>
-                <th className="py-2 w-24">Price</th>
+              <tr className="text-left" style={{ background: HEADER_BG }}>
+                <th className="py-2 px-2 w-8 font-semibold">#</th>
+                <th className="py-2 px-2 font-semibold">Item</th>
+                <th className="py-2 px-2 w-20 font-semibold">Qty</th>
+                <th className="py-2 px-2 w-20 font-semibold">Unit</th>
+                <th className="py-2 px-2 w-32 font-semibold">Status</th>
+                <th className="py-2 px-2 w-12 text-center font-semibold">✓</th>
+                <th className="py-2 px-2 w-24 font-semibold">Price</th>
               </tr>
             </thead>
-            <tbody className="font-[Caveat] text-xl">
+            <tbody>
               {(entry.rows || []).map((r, i) => {
                 const price = r.price != null ? String(r.price) : r.amount != null ? String(r.amount) : "";
                 return (
-                  <tr key={i} className="border-t" style={{ borderColor: "#E8E4D0" }}>
-                    <td className="py-1 pr-2 opacity-70">{i + 1}</td>
-                    <td className="pr-2">{r.item ?? ""}</td>
-                    <td className="pr-2">{r.qty ?? ""}</td>
-                    <td className="pr-2">{r.unit ?? ""}</td>
-                    <td className="pr-2">{(r.status ?? "").replace("_", " ")}</td>
-                    <td className="text-center">{r.bought ? "✓" : ""}</td>
-                    <td className="pr-2">{price ? `₹ ${price}` : ""}</td>
+                  <tr key={i} style={{ borderTop: `1px solid ${RULE_BORDER}` }}>
+                    <td className="py-2 px-2 opacity-60">{i + 1}</td>
+                    <td className="px-2">{r.item ?? ""}</td>
+                    <td className="px-2">{r.qty ?? ""}</td>
+                    <td className="px-2">{r.unit ?? ""}</td>
+                    <td className="px-2">{(r.status ?? "").replace("_", " ")}</td>
+                    <td className="text-center px-2">{r.bought ? "✓" : ""}</td>
+                    <td className="px-2">{price ? `₹ ${price}` : ""}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-        <p className="mt-5 font-[Caveat] text-xl">Total Spent: {inr(Number(entry.total_amount) || 0)}</p>
+        <p className="mt-5 text-sm font-medium">Total Spent: {inr(Number(entry.total_amount) || 0)}</p>
       </div>
     </div>
   );
