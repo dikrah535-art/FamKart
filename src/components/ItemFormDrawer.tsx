@@ -25,6 +25,7 @@ export type ItemRow = {
   notes: string;
   is_recurring: boolean;
   recur_interval: "daily" | "weekly" | "monthly" | null;
+  estimated_cost?: number;
 };
 
 const empty: ItemRow = {
