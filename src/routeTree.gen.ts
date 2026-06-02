@@ -17,6 +17,7 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AppTodoRouteImport } from './routes/_app.todo'
 import { Route as AppShoppingRouteImport } from './routes/_app.shopping'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppNotebookRouteImport } from './routes/_app.notebook'
@@ -66,6 +67,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppTodoRoute = AppTodoRouteImport.update({
+  id: '/todo',
+  path: '/todo',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppShoppingRoute = AppShoppingRouteImport.update({
   id: '/shopping',
@@ -133,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/notebook': typeof AppNotebookRouteWithChildren
   '/settings': typeof AppSettingsRoute
   '/shopping': typeof AppShoppingRoute
+  '/todo': typeof AppTodoRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/category/$id': typeof AppCategoryIdRoute
   '/notebook/entry': typeof AppNotebookEntryRoute
@@ -152,6 +159,7 @@ export interface FileRoutesByTo {
   '/notebook': typeof AppNotebookRouteWithChildren
   '/settings': typeof AppSettingsRoute
   '/shopping': typeof AppShoppingRoute
+  '/todo': typeof AppTodoRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/category/$id': typeof AppCategoryIdRoute
   '/notebook/entry': typeof AppNotebookEntryRoute
@@ -173,6 +181,7 @@ export interface FileRoutesById {
   '/_app/notebook': typeof AppNotebookRouteWithChildren
   '/_app/settings': typeof AppSettingsRoute
   '/_app/shopping': typeof AppShoppingRoute
+  '/_app/todo': typeof AppTodoRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/_app/category/$id': typeof AppCategoryIdRoute
   '/_app/notebook/entry': typeof AppNotebookEntryRoute
@@ -194,6 +203,7 @@ export interface FileRouteTypes {
     | '/notebook'
     | '/settings'
     | '/shopping'
+    | '/todo'
     | '/auth/callback'
     | '/category/$id'
     | '/notebook/entry'
@@ -213,6 +223,7 @@ export interface FileRouteTypes {
     | '/notebook'
     | '/settings'
     | '/shopping'
+    | '/todo'
     | '/auth/callback'
     | '/category/$id'
     | '/notebook/entry'
@@ -233,6 +244,7 @@ export interface FileRouteTypes {
     | '/_app/notebook'
     | '/_app/settings'
     | '/_app/shopping'
+    | '/_app/todo'
     | '/auth/callback'
     | '/_app/category/$id'
     | '/_app/notebook/entry'
@@ -306,6 +318,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/todo': {
+      id: '/_app/todo'
+      path: '/todo'
+      fullPath: '/todo'
+      preLoaderRoute: typeof AppTodoRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/shopping': {
       id: '/_app/shopping'
@@ -401,6 +420,7 @@ interface AppRouteChildren {
   AppNotebookRoute: typeof AppNotebookRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
   AppShoppingRoute: typeof AppShoppingRoute
+  AppTodoRoute: typeof AppTodoRoute
   AppCategoryIdRoute: typeof AppCategoryIdRoute
 }
 
@@ -413,6 +433,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppNotebookRoute: AppNotebookRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,
   AppShoppingRoute: AppShoppingRoute,
+  AppTodoRoute: AppTodoRoute,
   AppCategoryIdRoute: AppCategoryIdRoute,
 }
 
