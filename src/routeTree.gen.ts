@@ -20,6 +20,7 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AppShoppingRouteImport } from './routes/_app.shopping'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppNotebookRouteImport } from './routes/_app.notebook'
+import { Route as AppItemsRouteImport } from './routes/_app.items'
 import { Route as AppHistoryRouteImport } from './routes/_app.history'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppCategoriesRouteImport } from './routes/_app.categories'
@@ -81,6 +82,11 @@ const AppNotebookRoute = AppNotebookRouteImport.update({
   path: '/notebook',
   getParentRoute: () => AppRoute,
 } as any)
+const AppItemsRoute = AppItemsRouteImport.update({
+  id: '/items',
+  path: '/items',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppHistoryRoute = AppHistoryRouteImport.update({
   id: '/history',
   path: '/history',
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/categories': typeof AppCategoriesRoute
   '/dashboard': typeof AppDashboardRoute
   '/history': typeof AppHistoryRoute
+  '/items': typeof AppItemsRoute
   '/notebook': typeof AppNotebookRouteWithChildren
   '/settings': typeof AppSettingsRoute
   '/shopping': typeof AppShoppingRoute
@@ -141,6 +148,7 @@ export interface FileRoutesByTo {
   '/categories': typeof AppCategoriesRoute
   '/dashboard': typeof AppDashboardRoute
   '/history': typeof AppHistoryRoute
+  '/items': typeof AppItemsRoute
   '/notebook': typeof AppNotebookRouteWithChildren
   '/settings': typeof AppSettingsRoute
   '/shopping': typeof AppShoppingRoute
@@ -161,6 +169,7 @@ export interface FileRoutesById {
   '/_app/categories': typeof AppCategoriesRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/history': typeof AppHistoryRoute
+  '/_app/items': typeof AppItemsRoute
   '/_app/notebook': typeof AppNotebookRouteWithChildren
   '/_app/settings': typeof AppSettingsRoute
   '/_app/shopping': typeof AppShoppingRoute
@@ -181,6 +190,7 @@ export interface FileRouteTypes {
     | '/categories'
     | '/dashboard'
     | '/history'
+    | '/items'
     | '/notebook'
     | '/settings'
     | '/shopping'
@@ -199,6 +209,7 @@ export interface FileRouteTypes {
     | '/categories'
     | '/dashboard'
     | '/history'
+    | '/items'
     | '/notebook'
     | '/settings'
     | '/shopping'
@@ -218,6 +229,7 @@ export interface FileRouteTypes {
     | '/_app/categories'
     | '/_app/dashboard'
     | '/_app/history'
+    | '/_app/items'
     | '/_app/notebook'
     | '/_app/settings'
     | '/_app/shopping'
@@ -316,6 +328,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppNotebookRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/items': {
+      id: '/_app/items'
+      path: '/items'
+      fullPath: '/items'
+      preLoaderRoute: typeof AppItemsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/history': {
       id: '/_app/history'
       path: '/history'
@@ -378,6 +397,7 @@ interface AppRouteChildren {
   AppCategoriesRoute: typeof AppCategoriesRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppHistoryRoute: typeof AppHistoryRoute
+  AppItemsRoute: typeof AppItemsRoute
   AppNotebookRoute: typeof AppNotebookRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
   AppShoppingRoute: typeof AppShoppingRoute
@@ -389,6 +409,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCategoriesRoute: AppCategoriesRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppHistoryRoute: AppHistoryRoute,
+  AppItemsRoute: AppItemsRoute,
   AppNotebookRoute: AppNotebookRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,
   AppShoppingRoute: AppShoppingRoute,
@@ -410,3 +431,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
