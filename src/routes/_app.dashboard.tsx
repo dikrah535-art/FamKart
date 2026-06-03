@@ -392,71 +392,70 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
     resize();
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    const SEGMENTS = 8;
-    const baseY = (i: number) => (i / (SEGMENTS - 1)) * 0.8 + 0.05;
-    const t0 = performance.now();
+    const pts: [number, number][] = [
+      [0.02, 0.12], [0.1, 0.06], [0.2, 0.22], [0.3, 0.13], [0.42, 0.34],
+      [0.53, 0.22], [0.63, 0.47], [0.74, 0.34], [0.83, 0.58], [0.91, 0.47], [1, 0.82],
+    ];
+    let sp = 0;
     let raf = 0;
-    const draw = (now: number) => {
+    const draw = () => {
       const w = c.width;
       const hh = c.height;
       ctx.clearRect(0, 0, w, hh);
-      // grid
-      ctx.strokeStyle = "rgba(245,158,11,0.12)";
-      ctx.lineWidth = 1 * dpr;
+      ctx.strokeStyle = "rgba(245,158,11,0.10)";
+      ctx.lineWidth = 0.5 * dpr;
       for (let i = 1; i < 4; i++) {
         const y = (i / 4) * hh;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       }
-      const elapsed = (now - t0) / 1000;
-      const cycle = 4;
-      const p = Math.min(1, (elapsed % cycle) / (cycle * 0.85));
-      const points: [number, number][] = [];
-      for (let i = 0; i < SEGMENTS; i++) {
-        const wob = Math.sin(i * 1.7) * 0.06;
-        const x = (i / (SEGMENTS - 1)) * w;
-        const y = (baseY(i) + wob) * hh;
-        points.push([x, y]);
-      }
-      const totalLen = points.length - 1;
-      const drawUpTo = totalLen * p;
+      const abs = pts.map(([x, y]) => [x * w, y * hh] as [number, number]);
+      const total = abs.length - 1;
+      const upto = total * Math.min(1, sp);
       ctx.strokeStyle = "#F59E0B";
-      ctx.lineWidth = 2 * dpr;
+      ctx.lineWidth = 2.2 * dpr;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
       ctx.beginPath();
-      ctx.moveTo(points[0][0], points[0][1]);
-      let tipX = points[0][0];
-      let tipY = points[0][1];
-      for (let i = 1; i < points.length; i++) {
-        if (i <= drawUpTo) {
-          ctx.lineTo(points[i][0], points[i][1]);
-          tipX = points[i][0];
-          tipY = points[i][1];
+      ctx.moveTo(abs[0][0], abs[0][1]);
+      let tipX = abs[0][0], tipY = abs[0][1], prevX = abs[0][0], prevY = abs[0][1];
+      for (let i = 1; i < abs.length; i++) {
+        if (i <= upto) {
+          prevX = abs[i - 1][0]; prevY = abs[i - 1][1];
+          ctx.lineTo(abs[i][0], abs[i][1]);
+          tipX = abs[i][0]; tipY = abs[i][1];
         } else {
-          const frac = drawUpTo - (i - 1);
+          const frac = upto - (i - 1);
           if (frac > 0) {
-            const x = points[i - 1][0] + (points[i][0] - points[i - 1][0]) * frac;
-            const y = points[i - 1][1] + (points[i][1] - points[i - 1][1]) * frac;
-            ctx.lineTo(x, y);
-            tipX = x;
-            tipY = y;
+            prevX = abs[i - 1][0]; prevY = abs[i - 1][1];
+            tipX = prevX + (abs[i][0] - prevX) * frac;
+            tipY = prevY + (abs[i][1] - prevY) * frac;
+            ctx.lineTo(tipX, tipY);
           }
           break;
         }
       }
       ctx.stroke();
-      ctx.shadowColor = "#F59E0B";
-      ctx.shadowBlur = 8 * dpr;
-      ctx.fillStyle = "#F59E0B";
-      const a = 7 * dpr;
+      // glow
+      ctx.fillStyle = "rgba(245,158,11,0.2)";
       ctx.beginPath();
-      ctx.moveTo(tipX - a, tipY - a);
-      ctx.lineTo(tipX + a, tipY - a);
-      ctx.lineTo(tipX, tipY + a);
+      ctx.arc(tipX, tipY, 9 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+      // directional arrow
+      const angle = Math.atan2(tipY - prevY, tipX - prevX);
+      const a = 9 * dpr;
+      ctx.save();
+      ctx.translate(tipX, tipY);
+      ctx.rotate(angle);
+      ctx.fillStyle = "#F59E0B";
+      ctx.beginPath();
+      ctx.moveTo(a, 0);
+      ctx.lineTo(-a * 0.7, -a * 0.6);
+      ctx.lineTo(-a * 0.7, a * 0.6);
       ctx.closePath();
       ctx.fill();
-      ctx.shadowBlur = 0;
+      ctx.restore();
+      sp += 0.007;
+      if (sp >= 1) sp = 0;
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
@@ -470,7 +469,7 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
       <canvas
         ref={canvasRef}
         className="pointer-events-none absolute"
-        style={{ right: 0, bottom: 0, width: "60%", height: "65%" }}
+        style={{ right: 0, bottom: 0, width: "100%", height: "60%" }}
       />
     </StatShell>
   );
