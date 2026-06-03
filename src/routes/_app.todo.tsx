@@ -67,14 +67,39 @@ function TodoPage() {
   }, [family]);
 
   const add = async () => {
-    if (!family || !user) return;
+    if (!user) return;
+    let familyId = family?.id ?? null;
+    if (!familyId) {
+      const { data: f1 } = await supabase
+        .from("families")
+        .select("id")
+        .eq("created_by", user.id)
+        .maybeSingle();
+      familyId = f1?.id ?? null;
+    }
+    if (!familyId) {
+      const { data: f2 } = await supabase
+        .from("families")
+        .select("id")
+        .limit(1)
+        .maybeSingle();
+      familyId = f2?.id ?? null;
+    }
+    if (!familyId) {
+      toast.error("No family found. Create or join a family first.");
+      return;
+    }
     const { error } = await supabase.from("todo_entries").insert({
-      family_id: family.id,
+      family_id: familyId,
       task_name: "",
       due_date: today,
       created_by: user.id,
     });
-    if (error) toast.error(friendlyError(error));
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    load();
   };
 
   const updateTodo = async (id: string, patch: Partial<Todo>) => {
