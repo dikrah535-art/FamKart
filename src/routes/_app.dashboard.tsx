@@ -314,40 +314,38 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
     resize();
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    type Ring = { t: number; max: number };
+    type Ring = { r: number; maxR: number; spd: number };
     const rings: Ring[] = [];
-    let last = performance.now();
-    let lastSpawn = -Infinity;
     let raf = 0;
-    const LIFE = 1800;
-    const SPAWN = 1100;
-    const loop = (now: number) => {
-      const dt = now - last;
-      last = now;
+    let frame = 0;
+    const loop = () => {
       ctx.clearRect(0, 0, c.width, c.height);
-      const w = c.width / dpr;
-      const hh = c.height / dpr;
-      if (now - lastSpawn > SPAWN) {
-        rings.push({ t: 0, max: Math.hypot(w, hh) });
-        lastSpawn = now;
-      }
-      const cx = (w - 14) * dpr;
-      const cy = 14 * dpr;
+      const w = c.width;
+      const hh = c.height;
+      const tx = w - 20 * dpr;
+      const ty = 20 * dpr;
+      const maxR = Math.max(
+        Math.hypot(tx, ty),
+        Math.hypot(w - tx, ty),
+        Math.hypot(tx, hh - ty),
+        Math.hypot(w - tx, hh - ty),
+      );
+      if (frame % 65 === 0) rings.push({ r: 4 * dpr, maxR, spd: maxR / 95 });
       for (let i = rings.length - 1; i >= 0; i--) {
-        const r = rings[i];
-        r.t += dt;
-        const p = r.t / LIFE;
-        if (p >= 1) { rings.splice(i, 1); continue; }
-        const radius = p * r.max * dpr;
-        const alpha = (1 - p) * 0.65;
-        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-        g.addColorStop(0, `rgba(239,68,68,${alpha})`);
+        const ring = rings[i];
+        ring.r += ring.spd;
+        if (ring.r >= ring.maxR) { rings.splice(i, 1); continue; }
+        const op = 0.65 * (1 - ring.r / ring.maxR);
+        const g = ctx.createRadialGradient(tx, ty, 0, tx, ty, ring.r);
+        g.addColorStop(0, `rgba(239,68,68,${op * 0.4})`);
+        g.addColorStop(0.45, `rgba(239,68,68,${op})`);
         g.addColorStop(1, "rgba(239,68,68,0)");
         ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.arc(tx, ty, ring.r, 0, Math.PI * 2);
         ctx.fill();
       }
+      frame++;
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -358,16 +356,21 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
 
   return (
     <StatShell label="Urgent" value={value} onClick={onClick} glow="#EF4444" hovering={h} setHovering={setH}>
-      <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
-      <svg
-        width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EF4444"
-        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-        className="absolute right-3 top-3"
+      <canvas
+        ref={canvasRef}
+        className="pointer-events-none"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+      />
+      <span
+        className="absolute"
+        style={{
+          right: 10, top: 6, fontSize: 22, zIndex: 3,
+          filter: h ? "drop-shadow(0 0 10px #EF4444)" : "none",
+          transition: "filter 0.2s",
+        }}
       >
-        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-        <line x1="12" y1="9" x2="12" y2="13" />
-        <line x1="12" y1="17" x2="12.01" y2="17" />
-      </svg>
+        ⚠️
+      </span>
     </StatShell>
   );
 }
