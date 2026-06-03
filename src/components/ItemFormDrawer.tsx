@@ -117,6 +117,7 @@ export function ItemFormDrawer({
                     type="number" min={0} step="0.1"
                     value={form.quantity ? String(form.quantity) : ""}
                     placeholder="0"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setForm({ ...form, quantity: e.target.value === "" ? 0 : Number(e.target.value) })}
                   />
                 </div>
