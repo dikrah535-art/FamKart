@@ -477,51 +477,117 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
 
 function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => void; reduce: boolean }) {
   const [h, setH] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (!h || reduce) return;
+    const c = canvasRef.current;
+    if (!c) return;
+    const dpr = window.devicePixelRatio || 1;
+    const resize = () => {
+      const r = c.getBoundingClientRect();
+      c.width = r.width * dpr;
+      c.height = r.height * dpr;
+    };
+    resize();
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    type Note = { x: number; y: number; vx: number; vy: number; r: number; rs: number; s: number };
+    const notes: Note[] = [];
+    let raf = 0;
+    let frame = 0;
+    const DELAY = Math.ceil((650 / 1000) * 60);
+    const loop = () => {
+      ctx.clearRect(0, 0, c.width, c.height);
+      const ox = c.width - 28 * dpr;
+      const oy = 16 * dpr;
+      if (frame > DELAY && Math.random() < 0.30) {
+        notes.push({
+          x: ox, y: oy,
+          vx: (Math.random() - 0.5) * 1.1 * dpr,
+          vy: (0.9 + Math.random() * 1.6) * dpr,
+          r: Math.random() * Math.PI * 2,
+          rs: (Math.random() - 0.5) * 2.5 * (Math.PI / 180),
+          s: 8 + Math.random() * 4,
+        });
+      }
+      for (let i = notes.length - 1; i >= 0; i--) {
+        const n = notes[i];
+        n.vy += 0.018 * dpr;
+        n.x += n.vx;
+        n.y += n.vy;
+        n.r += n.rs;
+        if (n.y > c.height + 20) { notes.splice(i, 1); continue; }
+        const w = n.s * 1.6 * dpr;
+        const hgt = n.s * dpr;
+        ctx.save();
+        ctx.translate(n.x, n.y);
+        ctx.rotate(n.r);
+        ctx.shadowColor = "rgba(62,207,142,0.35)";
+        ctx.shadowBlur = 5;
+        ctx.fillStyle = "#152b20";
+        ctx.strokeStyle = "#3ECF8E";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.rect(-w / 2, -hgt / 2, w, hgt);
+        ctx.fill();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        // inner borders
+        ctx.strokeStyle = "rgba(62,207,142,0.45)";
+        ctx.beginPath();
+        ctx.moveTo(-w / 2 + 2, -hgt / 2 + 2);
+        ctx.lineTo(w / 2 - 2, -hgt / 2 + 2);
+        ctx.moveTo(-w / 2 + 2, hgt / 2 - 2);
+        ctx.lineTo(w / 2 - 2, hgt / 2 - 2);
+        ctx.stroke();
+        // ₹ symbol
+        ctx.fillStyle = "#3ECF8E";
+        ctx.font = `bold ${Math.round(n.s)}px Inter, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("₹", 0, 0);
+        ctx.restore();
+      }
+      frame++;
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    const ro = new ResizeObserver(resize);
+    ro.observe(c);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+  }, [h, reduce]);
+
   return (
     <StatShell label="Budget used" value={value} onClick={onClick} glow="#7C3AED" hovering={h} setHovering={setH}>
-      <div className="absolute right-3 top-3 h-9 w-11" style={{ perspective: 90 }}>
-        {/* Wallet body */}
+      <canvas
+        ref={canvasRef}
+        className="pointer-events-none"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+      />
+      <div
+        style={{
+          position: "absolute", top: 9, right: 9,
+          width: 36, height: 28, perspective: 400, zIndex: 3,
+        }}
+      >
         <div
-          className="absolute inset-x-0 bottom-0 h-6 rounded-sm"
-          style={{ background: "#7C3AED" }}
+          style={{
+            position: "absolute", inset: 0,
+            background: "linear-gradient(145deg,#7C3AED,#5B21B6)",
+            borderRadius: 5,
+          }}
         />
-        {/* Wallet flap */}
-        <motion.div
-          className="absolute inset-x-0 top-0 h-4 rounded-t-sm origin-bottom"
-          style={{ background: "#9F67FF" }}
-          animate={!reduce && h ? { rotateX: -150 } : { rotateX: 0 }}
-          transition={{ duration: 0.6, ease: "easeInOut" }}
+        <div
+          style={{
+            position: "absolute", inset: 0,
+            background: "linear-gradient(145deg,#9333EA,#7C3AED)",
+            borderRadius: 5,
+            transformOrigin: "right center",
+            animation: !reduce && h ? "wLeft 0.7s ease-out forwards" : undefined,
+            transform: !reduce && h ? undefined : "rotateY(0deg)",
+          }}
         />
-        {/* Rain notes (after flap opens) */}
-        {!reduce && h && Array.from({ length: 4 }).map((_, i) => (
-          <motion.div
-            key={i}
-            className="pointer-events-none absolute grid place-items-center rounded-sm text-[8px] font-bold"
-            style={{
-              width: 14, height: 9,
-              background: "#1a3d2b",
-              border: "1px solid #3ECF8E",
-              color: "#3ECF8E",
-              left: 2 + (i % 2) * 12,
-              top: 6,
-            }}
-            initial={{ y: 0, opacity: 0, rotate: 0 }}
-            animate={{
-              y: 40,
-              opacity: [0, 1, 1, 0],
-              rotate: (i % 2 === 0 ? 1 : -1) * 30,
-            }}
-            transition={{
-              delay: 0.5 + i * 0.35,
-              duration: 1.6,
-              repeat: Infinity,
-              repeatDelay: 0.6,
-              ease: "easeIn",
-            }}
-          >
-            ₹
-          </motion.div>
-        ))}
       </div>
     </StatShell>
   );
