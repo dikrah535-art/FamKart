@@ -87,7 +87,7 @@ function BudgetPage() {
         <div className="rounded-xl border border-border bg-card p-5">
           <Label className="text-xs text-muted-foreground">Monthly budget</Label>
           <div className="mt-2 flex items-center gap-2">
-            <Input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="0" />
+            <Input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} onFocus={(e) => e.target.select()} placeholder="0" />
             <Button onClick={saveBudget}>Save</Button>
           </div>
           <p className="mt-3 text-2xl font-bold">{inr(budgetNum)}</p>
@@ -114,8 +114,13 @@ function BudgetPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
               <XAxis dataKey="name" stroke="var(--color-muted-foreground)" fontSize={11} />
               <YAxis stroke="var(--color-muted-foreground)" fontSize={11} />
-              <Tooltip contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: 8 }} />
-              <Bar dataKey="spent" fill="var(--color-primary)" radius={[6, 6, 0, 0]} />
+              <Tooltip
+                cursor={{ fill: "transparent" }}
+                contentStyle={{ background: "#1A1A1A", border: "1px solid #2A2A2A", borderRadius: 8, color: "#fff" }}
+                itemStyle={{ color: "#fff" }}
+                labelStyle={{ color: "#fff" }}
+              />
+              <Bar dataKey="spent" fill="var(--color-primary)" radius={[6, 6, 0, 0]} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -129,11 +134,17 @@ function BudgetPage() {
                   { name: "Remaining", value: Math.max(0, budgetNum - monthSpend) || 1 },
                 ]}
                 dataKey="value" innerRadius={60} outerRadius={100} stroke="none"
+                isAnimationActive={false}
               >
                 <Cell fill="var(--color-primary)" />
                 <Cell fill="var(--color-muted)" />
               </Pie>
-              <Tooltip contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: 8 }} />
+              <Tooltip
+                cursor={{ fill: "transparent" }}
+                contentStyle={{ background: "#1A1A1A", border: "1px solid #2A2A2A", borderRadius: 8, color: "#fff" }}
+                itemStyle={{ color: "#fff" }}
+                labelStyle={{ color: "#fff" }}
+              />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -146,8 +157,13 @@ function BudgetPage() {
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
             <XAxis dataKey="label" stroke="var(--color-muted-foreground)" fontSize={11} />
             <YAxis stroke="var(--color-muted-foreground)" fontSize={11} />
-            <Tooltip contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: 8 }} />
-            <Line type="monotone" dataKey="spend" stroke="var(--color-primary)" strokeWidth={2} dot={{ fill: "var(--color-primary)" }} />
+              <Tooltip
+                cursor={{ stroke: "transparent" }}
+                contentStyle={{ background: "#1A1A1A", border: "1px solid #2A2A2A", borderRadius: 8, color: "#fff" }}
+                itemStyle={{ color: "#fff" }}
+                labelStyle={{ color: "#fff" }}
+              />
+              <Line type="monotone" dataKey="spend" stroke="var(--color-primary)" strokeWidth={2} dot={{ fill: "var(--color-primary)" }} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
