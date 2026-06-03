@@ -254,35 +254,45 @@ function NeededStat({ value, onClick, reduce }: { value: number; onClick: () => 
   const [h, setH] = useState(false);
   return (
     <StatShell label="Items needed" value={value} onClick={onClick} glow="#3ECF8E" hovering={h} setHovering={setH}>
-      <div className="absolute right-3 top-3 h-9 w-11" style={{ perspective: 90 }}>
-        {/* Box body */}
+      <div
+        className="cardbox"
+        style={{ position: "absolute", top: 10, right: 10, width: 38, height: 38, perspective: 220 }}
+      >
         <div
-          className="absolute inset-x-0 bottom-0 h-5 rounded-sm border"
-          style={{ background: "rgba(62,207,142,0.18)", borderColor: "#3ECF8E" }}
-        />
-        {/* Left flap */}
-        <motion.div
-          className="absolute left-0 top-1 h-3 w-1/2 border"
           style={{
-            background: "rgba(62,207,142,0.3)",
-            borderColor: "#3ECF8E",
-            transformOrigin: "right center",
+            position: "absolute", bottom: 0, width: 38, height: 24,
+            background: "linear-gradient(150deg,#D97706,#92400E)",
+            borderRadius: "0 0 5px 5px",
           }}
-          animate={!reduce && h ? { rotateY: [0, -130, -130, 0] } : { rotateY: 0 }}
-          transition={{ duration: 1.8, repeat: h ? Infinity : 0, times: [0, 0.35, 0.7, 1], ease: "easeInOut" }}
         />
-        {/* Right flap */}
-        <motion.div
-          className="absolute right-0 top-1 h-3 w-1/2 border"
+        <div
           style={{
-            background: "rgba(62,207,142,0.3)",
-            borderColor: "#3ECF8E",
-            transformOrigin: "left center",
+            position: "absolute", bottom: 0, left: "50%", width: 2, height: 24,
+            background: "#92400E", transform: "translateX(-50%)",
           }}
-          animate={!reduce && h ? { rotateY: [0, 130, 130, 0] } : { rotateY: 0 }}
-          transition={{ duration: 1.8, repeat: h ? Infinity : 0, times: [0, 0.35, 0.7, 1], ease: "easeInOut" }}
+        />
+        <div
+          style={{
+            position: "absolute", top: 0, left: 0, width: 19, height: 15,
+            background: "#F59E0B", borderRadius: "3px 0 0 0",
+            transformOrigin: "bottom left",
+            animation: !reduce && h ? "cbFL 1.8s ease-in-out infinite" : undefined,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute", top: 0, right: 0, width: 19, height: 15,
+            background: "#F59E0B", borderRadius: "0 3px 0 0",
+            transformOrigin: "bottom right",
+            animation: !reduce && h ? "cbFR 1.8s ease-in-out infinite" : undefined,
+          }}
         />
       </div>
+      <style>{`
+        @keyframes cbFL { 0%,100%{transform:rotateY(0)} 22%{transform:rotateY(-125deg)} 62%{transform:rotateY(-125deg)} 82%{transform:rotateY(0)} }
+        @keyframes cbFR { 0%,100%{transform:rotateY(0)} 22%{transform:rotateY(125deg)} 62%{transform:rotateY(125deg)} 82%{transform:rotateY(0)} }
+        @keyframes wLeft { 0%{transform:rotateY(0deg)} 100%{transform:rotateY(-140deg)} }
+      `}</style>
     </StatShell>
   );
 }
