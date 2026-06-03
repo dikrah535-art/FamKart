@@ -254,35 +254,45 @@ function NeededStat({ value, onClick, reduce }: { value: number; onClick: () => 
   const [h, setH] = useState(false);
   return (
     <StatShell label="Items needed" value={value} onClick={onClick} glow="#3ECF8E" hovering={h} setHovering={setH}>
-      <div className="absolute right-3 top-3 h-9 w-11" style={{ perspective: 90 }}>
-        {/* Box body */}
+      <div
+        className="cardbox"
+        style={{ position: "absolute", top: 10, right: 10, width: 38, height: 38, perspective: 220 }}
+      >
         <div
-          className="absolute inset-x-0 bottom-0 h-5 rounded-sm border"
-          style={{ background: "rgba(62,207,142,0.18)", borderColor: "#3ECF8E" }}
-        />
-        {/* Left flap */}
-        <motion.div
-          className="absolute left-0 top-1 h-3 w-1/2 border"
           style={{
-            background: "rgba(62,207,142,0.3)",
-            borderColor: "#3ECF8E",
-            transformOrigin: "right center",
+            position: "absolute", bottom: 0, width: 38, height: 24,
+            background: "linear-gradient(150deg,#D97706,#92400E)",
+            borderRadius: "0 0 5px 5px",
           }}
-          animate={!reduce && h ? { rotateY: [0, -130, -130, 0] } : { rotateY: 0 }}
-          transition={{ duration: 1.8, repeat: h ? Infinity : 0, times: [0, 0.35, 0.7, 1], ease: "easeInOut" }}
         />
-        {/* Right flap */}
-        <motion.div
-          className="absolute right-0 top-1 h-3 w-1/2 border"
+        <div
           style={{
-            background: "rgba(62,207,142,0.3)",
-            borderColor: "#3ECF8E",
-            transformOrigin: "left center",
+            position: "absolute", bottom: 0, left: "50%", width: 2, height: 24,
+            background: "#92400E", transform: "translateX(-50%)",
           }}
-          animate={!reduce && h ? { rotateY: [0, 130, 130, 0] } : { rotateY: 0 }}
-          transition={{ duration: 1.8, repeat: h ? Infinity : 0, times: [0, 0.35, 0.7, 1], ease: "easeInOut" }}
+        />
+        <div
+          style={{
+            position: "absolute", top: 0, left: 0, width: 19, height: 15,
+            background: "#F59E0B", borderRadius: "3px 0 0 0",
+            transformOrigin: "bottom left",
+            animation: !reduce && h ? "cbFL 1.8s ease-in-out infinite" : undefined,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute", top: 0, right: 0, width: 19, height: 15,
+            background: "#F59E0B", borderRadius: "0 3px 0 0",
+            transformOrigin: "bottom right",
+            animation: !reduce && h ? "cbFR 1.8s ease-in-out infinite" : undefined,
+          }}
         />
       </div>
+      <style>{`
+        @keyframes cbFL { 0%,100%{transform:rotateY(0)} 22%{transform:rotateY(-125deg)} 62%{transform:rotateY(-125deg)} 82%{transform:rotateY(0)} }
+        @keyframes cbFR { 0%,100%{transform:rotateY(0)} 22%{transform:rotateY(125deg)} 62%{transform:rotateY(125deg)} 82%{transform:rotateY(0)} }
+        @keyframes wLeft { 0%{transform:rotateY(0deg)} 100%{transform:rotateY(-140deg)} }
+      `}</style>
     </StatShell>
   );
 }
@@ -304,40 +314,38 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
     resize();
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    type Ring = { t: number; max: number };
+    type Ring = { r: number; maxR: number; spd: number };
     const rings: Ring[] = [];
-    let last = performance.now();
-    let lastSpawn = -Infinity;
     let raf = 0;
-    const LIFE = 1800;
-    const SPAWN = 1100;
-    const loop = (now: number) => {
-      const dt = now - last;
-      last = now;
+    let frame = 0;
+    const loop = () => {
       ctx.clearRect(0, 0, c.width, c.height);
-      const w = c.width / dpr;
-      const hh = c.height / dpr;
-      if (now - lastSpawn > SPAWN) {
-        rings.push({ t: 0, max: Math.hypot(w, hh) });
-        lastSpawn = now;
-      }
-      const cx = (w - 14) * dpr;
-      const cy = 14 * dpr;
+      const w = c.width;
+      const hh = c.height;
+      const tx = w - 20 * dpr;
+      const ty = 20 * dpr;
+      const maxR = Math.max(
+        Math.hypot(tx, ty),
+        Math.hypot(w - tx, ty),
+        Math.hypot(tx, hh - ty),
+        Math.hypot(w - tx, hh - ty),
+      );
+      if (frame % 65 === 0) rings.push({ r: 4 * dpr, maxR, spd: maxR / 95 });
       for (let i = rings.length - 1; i >= 0; i--) {
-        const r = rings[i];
-        r.t += dt;
-        const p = r.t / LIFE;
-        if (p >= 1) { rings.splice(i, 1); continue; }
-        const radius = p * r.max * dpr;
-        const alpha = (1 - p) * 0.65;
-        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-        g.addColorStop(0, `rgba(239,68,68,${alpha})`);
+        const ring = rings[i];
+        ring.r += ring.spd;
+        if (ring.r >= ring.maxR) { rings.splice(i, 1); continue; }
+        const op = 0.65 * (1 - ring.r / ring.maxR);
+        const g = ctx.createRadialGradient(tx, ty, 0, tx, ty, ring.r);
+        g.addColorStop(0, `rgba(239,68,68,${op * 0.4})`);
+        g.addColorStop(0.45, `rgba(239,68,68,${op})`);
         g.addColorStop(1, "rgba(239,68,68,0)");
         ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.arc(tx, ty, ring.r, 0, Math.PI * 2);
         ctx.fill();
       }
+      frame++;
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -348,16 +356,21 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
 
   return (
     <StatShell label="Urgent" value={value} onClick={onClick} glow="#EF4444" hovering={h} setHovering={setH}>
-      <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
-      <svg
-        width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EF4444"
-        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-        className="absolute right-3 top-3"
+      <canvas
+        ref={canvasRef}
+        className="pointer-events-none"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+      />
+      <span
+        className="absolute"
+        style={{
+          right: 10, top: 6, fontSize: 22, zIndex: 3,
+          filter: h ? "drop-shadow(0 0 10px #EF4444)" : "none",
+          transition: "filter 0.2s",
+        }}
       >
-        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-        <line x1="12" y1="9" x2="12" y2="13" />
-        <line x1="12" y1="17" x2="12.01" y2="17" />
-      </svg>
+        ⚠️
+      </span>
     </StatShell>
   );
 }
@@ -379,71 +392,70 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
     resize();
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    const SEGMENTS = 8;
-    const baseY = (i: number) => (i / (SEGMENTS - 1)) * 0.8 + 0.05;
-    const t0 = performance.now();
+    const pts: [number, number][] = [
+      [0.02, 0.12], [0.1, 0.06], [0.2, 0.22], [0.3, 0.13], [0.42, 0.34],
+      [0.53, 0.22], [0.63, 0.47], [0.74, 0.34], [0.83, 0.58], [0.91, 0.47], [1, 0.82],
+    ];
+    let sp = 0;
     let raf = 0;
-    const draw = (now: number) => {
+    const draw = () => {
       const w = c.width;
       const hh = c.height;
       ctx.clearRect(0, 0, w, hh);
-      // grid
-      ctx.strokeStyle = "rgba(245,158,11,0.12)";
-      ctx.lineWidth = 1 * dpr;
+      ctx.strokeStyle = "rgba(245,158,11,0.10)";
+      ctx.lineWidth = 0.5 * dpr;
       for (let i = 1; i < 4; i++) {
         const y = (i / 4) * hh;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       }
-      const elapsed = (now - t0) / 1000;
-      const cycle = 4;
-      const p = Math.min(1, (elapsed % cycle) / (cycle * 0.85));
-      const points: [number, number][] = [];
-      for (let i = 0; i < SEGMENTS; i++) {
-        const wob = Math.sin(i * 1.7) * 0.06;
-        const x = (i / (SEGMENTS - 1)) * w;
-        const y = (baseY(i) + wob) * hh;
-        points.push([x, y]);
-      }
-      const totalLen = points.length - 1;
-      const drawUpTo = totalLen * p;
+      const abs = pts.map(([x, y]) => [x * w, y * hh] as [number, number]);
+      const total = abs.length - 1;
+      const upto = total * Math.min(1, sp);
       ctx.strokeStyle = "#F59E0B";
-      ctx.lineWidth = 2 * dpr;
+      ctx.lineWidth = 2.2 * dpr;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
       ctx.beginPath();
-      ctx.moveTo(points[0][0], points[0][1]);
-      let tipX = points[0][0];
-      let tipY = points[0][1];
-      for (let i = 1; i < points.length; i++) {
-        if (i <= drawUpTo) {
-          ctx.lineTo(points[i][0], points[i][1]);
-          tipX = points[i][0];
-          tipY = points[i][1];
+      ctx.moveTo(abs[0][0], abs[0][1]);
+      let tipX = abs[0][0], tipY = abs[0][1], prevX = abs[0][0], prevY = abs[0][1];
+      for (let i = 1; i < abs.length; i++) {
+        if (i <= upto) {
+          prevX = abs[i - 1][0]; prevY = abs[i - 1][1];
+          ctx.lineTo(abs[i][0], abs[i][1]);
+          tipX = abs[i][0]; tipY = abs[i][1];
         } else {
-          const frac = drawUpTo - (i - 1);
+          const frac = upto - (i - 1);
           if (frac > 0) {
-            const x = points[i - 1][0] + (points[i][0] - points[i - 1][0]) * frac;
-            const y = points[i - 1][1] + (points[i][1] - points[i - 1][1]) * frac;
-            ctx.lineTo(x, y);
-            tipX = x;
-            tipY = y;
+            prevX = abs[i - 1][0]; prevY = abs[i - 1][1];
+            tipX = prevX + (abs[i][0] - prevX) * frac;
+            tipY = prevY + (abs[i][1] - prevY) * frac;
+            ctx.lineTo(tipX, tipY);
           }
           break;
         }
       }
       ctx.stroke();
-      ctx.shadowColor = "#F59E0B";
-      ctx.shadowBlur = 8 * dpr;
-      ctx.fillStyle = "#F59E0B";
-      const a = 7 * dpr;
+      // glow
+      ctx.fillStyle = "rgba(245,158,11,0.2)";
       ctx.beginPath();
-      ctx.moveTo(tipX - a, tipY - a);
-      ctx.lineTo(tipX + a, tipY - a);
-      ctx.lineTo(tipX, tipY + a);
+      ctx.arc(tipX, tipY, 9 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+      // directional arrow
+      const angle = Math.atan2(tipY - prevY, tipX - prevX);
+      const a = 9 * dpr;
+      ctx.save();
+      ctx.translate(tipX, tipY);
+      ctx.rotate(angle);
+      ctx.fillStyle = "#F59E0B";
+      ctx.beginPath();
+      ctx.moveTo(a, 0);
+      ctx.lineTo(-a * 0.7, -a * 0.6);
+      ctx.lineTo(-a * 0.7, a * 0.6);
       ctx.closePath();
       ctx.fill();
-      ctx.shadowBlur = 0;
+      ctx.restore();
+      sp += 0.007;
+      if (sp >= 1) sp = 0;
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
@@ -457,7 +469,7 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
       <canvas
         ref={canvasRef}
         className="pointer-events-none absolute"
-        style={{ right: 0, bottom: 0, width: "60%", height: "65%" }}
+        style={{ right: 0, bottom: 0, width: "100%", height: "60%" }}
       />
     </StatShell>
   );
@@ -465,51 +477,117 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
 
 function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => void; reduce: boolean }) {
   const [h, setH] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (!h || reduce) return;
+    const c = canvasRef.current;
+    if (!c) return;
+    const dpr = window.devicePixelRatio || 1;
+    const resize = () => {
+      const r = c.getBoundingClientRect();
+      c.width = r.width * dpr;
+      c.height = r.height * dpr;
+    };
+    resize();
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    type Note = { x: number; y: number; vx: number; vy: number; r: number; rs: number; s: number };
+    const notes: Note[] = [];
+    let raf = 0;
+    let frame = 0;
+    const DELAY = Math.ceil((650 / 1000) * 60);
+    const loop = () => {
+      ctx.clearRect(0, 0, c.width, c.height);
+      const ox = c.width - 28 * dpr;
+      const oy = 16 * dpr;
+      if (frame > DELAY && Math.random() < 0.30) {
+        notes.push({
+          x: ox, y: oy,
+          vx: (Math.random() - 0.5) * 1.1 * dpr,
+          vy: (0.9 + Math.random() * 1.6) * dpr,
+          r: Math.random() * Math.PI * 2,
+          rs: (Math.random() - 0.5) * 2.5 * (Math.PI / 180),
+          s: 8 + Math.random() * 4,
+        });
+      }
+      for (let i = notes.length - 1; i >= 0; i--) {
+        const n = notes[i];
+        n.vy += 0.018 * dpr;
+        n.x += n.vx;
+        n.y += n.vy;
+        n.r += n.rs;
+        if (n.y > c.height + 20) { notes.splice(i, 1); continue; }
+        const w = n.s * 1.6 * dpr;
+        const hgt = n.s * dpr;
+        ctx.save();
+        ctx.translate(n.x, n.y);
+        ctx.rotate(n.r);
+        ctx.shadowColor = "rgba(62,207,142,0.35)";
+        ctx.shadowBlur = 5;
+        ctx.fillStyle = "#152b20";
+        ctx.strokeStyle = "#3ECF8E";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.rect(-w / 2, -hgt / 2, w, hgt);
+        ctx.fill();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        // inner borders
+        ctx.strokeStyle = "rgba(62,207,142,0.45)";
+        ctx.beginPath();
+        ctx.moveTo(-w / 2 + 2, -hgt / 2 + 2);
+        ctx.lineTo(w / 2 - 2, -hgt / 2 + 2);
+        ctx.moveTo(-w / 2 + 2, hgt / 2 - 2);
+        ctx.lineTo(w / 2 - 2, hgt / 2 - 2);
+        ctx.stroke();
+        // ₹ symbol
+        ctx.fillStyle = "#3ECF8E";
+        ctx.font = `bold ${Math.round(n.s)}px Inter, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("₹", 0, 0);
+        ctx.restore();
+      }
+      frame++;
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    const ro = new ResizeObserver(resize);
+    ro.observe(c);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+  }, [h, reduce]);
+
   return (
     <StatShell label="Budget used" value={value} onClick={onClick} glow="#7C3AED" hovering={h} setHovering={setH}>
-      <div className="absolute right-3 top-3 h-9 w-11" style={{ perspective: 90 }}>
-        {/* Wallet body */}
+      <canvas
+        ref={canvasRef}
+        className="pointer-events-none"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+      />
+      <div
+        style={{
+          position: "absolute", top: 9, right: 9,
+          width: 36, height: 28, perspective: 400, zIndex: 3,
+        }}
+      >
         <div
-          className="absolute inset-x-0 bottom-0 h-6 rounded-sm"
-          style={{ background: "#7C3AED" }}
+          style={{
+            position: "absolute", inset: 0,
+            background: "linear-gradient(145deg,#7C3AED,#5B21B6)",
+            borderRadius: 5,
+          }}
         />
-        {/* Wallet flap */}
-        <motion.div
-          className="absolute inset-x-0 top-0 h-4 rounded-t-sm origin-bottom"
-          style={{ background: "#9F67FF" }}
-          animate={!reduce && h ? { rotateX: -150 } : { rotateX: 0 }}
-          transition={{ duration: 0.6, ease: "easeInOut" }}
+        <div
+          style={{
+            position: "absolute", inset: 0,
+            background: "linear-gradient(145deg,#9333EA,#7C3AED)",
+            borderRadius: 5,
+            transformOrigin: "right center",
+            animation: !reduce && h ? "wLeft 0.7s ease-out forwards" : undefined,
+            transform: !reduce && h ? undefined : "rotateY(0deg)",
+          }}
         />
-        {/* Rain notes (after flap opens) */}
-        {!reduce && h && Array.from({ length: 4 }).map((_, i) => (
-          <motion.div
-            key={i}
-            className="pointer-events-none absolute grid place-items-center rounded-sm text-[8px] font-bold"
-            style={{
-              width: 14, height: 9,
-              background: "#1a3d2b",
-              border: "1px solid #3ECF8E",
-              color: "#3ECF8E",
-              left: 2 + (i % 2) * 12,
-              top: 6,
-            }}
-            initial={{ y: 0, opacity: 0, rotate: 0 }}
-            animate={{
-              y: 40,
-              opacity: [0, 1, 1, 0],
-              rotate: (i % 2 === 0 ? 1 : -1) * 30,
-            }}
-            transition={{
-              delay: 0.5 + i * 0.35,
-              duration: 1.6,
-              repeat: Infinity,
-              repeatDelay: 0.6,
-              ease: "easeIn",
-            }}
-          >
-            ₹
-          </motion.div>
-        ))}
       </div>
     </StatShell>
   );
