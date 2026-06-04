@@ -135,6 +135,12 @@ function Dashboard() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
           {cats.map((c) => {
             const inCat = items.filter((i) => i.category_id === c.id);
+            const active = inCat.filter(
+              (i) => i.status !== "stocked" &&
+                (i.status === "needed" || i.status === "low_stock" || i.priority === "urgent")
+            );
+            const activeCount = active.length;
+            const hasActive = activeCount > 0;
             const stocked = inCat.filter((i) => i.status === "stocked").length;
             const pct = inCat.length ? Math.round((stocked / inCat.length) * 100) : 0;
             return (
@@ -143,15 +149,28 @@ function Dashboard() {
                 initial={reduce ? false : { opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.05 * cats.indexOf(c), duration: 0.3 }}
+                layout
               >
                 <Link
                   to="/category/$id"
                   params={{ id: c.id }}
-                  className="card-glow block rounded-xl border border-border bg-card p-4"
+                  className="card-glow block rounded-xl border bg-card p-4 transition-colors duration-500"
+                  style={{
+                    borderColor: hasActive ? "#3ECF8E" : "var(--color-border)",
+                    boxShadow: hasActive ? "0 0 0 1px rgba(62,207,142,0.25), 0 0 14px rgba(62,207,142,0.18)" : undefined,
+                  }}
                 >
                   <div className="flex items-center justify-between">
                     <CategoryIcon name={c.name} color={c.color} size={26} />
-                    <span className="rounded-full bg-accent px-2 py-0.5 text-xs">{inCat.length}</span>
+                    <span
+                      className="rounded-full px-2 py-0.5 text-xs transition-colors duration-500"
+                      style={{
+                        background: hasActive ? "rgba(62,207,142,0.15)" : "var(--color-accent)",
+                        color: hasActive ? "#3ECF8E" : undefined,
+                      }}
+                    >
+                      {activeCount}
+                    </span>
                   </div>
                   <p className="mt-2 font-semibold">{c.name}</p>
                   <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-accent">

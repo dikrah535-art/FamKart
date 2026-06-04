@@ -36,6 +36,7 @@ function CategoriesPage() {
   const navigate = Route.useNavigate();
   const [cats, setCats] = useState<Cat[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [activeCounts, setActiveCounts] = useState<Record<string, number>>({});
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("📦");
@@ -52,9 +53,36 @@ function CategoriesPage() {
     const map: Record<string, number> = {};
     (items ?? []).forEach((i: { category_id: string | null }) => { if (i.category_id) map[i.category_id] = (map[i.category_id] || 0) + 1; });
     setCounts(map);
+
+    // Active = not stocked AND (needed | low_stock | urgent priority) — for green border indicator
+    const { data: allItems } = await supabase
+      .from("items")
+      .select("category_id,status,priority")
+      .eq("family_id", family.id);
+    const aMap: Record<string, number> = {};
+    (allItems ?? []).forEach((i: { category_id: string | null; status: string; priority: string }) => {
+      if (!i.category_id) return;
+      if (i.status !== "stocked" && (i.status === "needed" || i.status === "low_stock" || i.priority === "urgent")) {
+        aMap[i.category_id] = (aMap[i.category_id] || 0) + 1;
+      }
+    });
+    setActiveCounts(aMap);
   };
 
   useEffect(() => { load(); }, [family, filter]);
+
+  useEffect(() => {
+    if (!family) return;
+    const ch = supabase
+      .channel(`cats:${family.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "items", filter: `family_id=eq.${family.id}` },
+        () => load(),
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [family, filter]);
 
   const create = async () => {
     if (!family || !name.trim()) return;
@@ -115,14 +143,31 @@ function CategoriesPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.07, duration: 0.3 }}
             whileHover={reduce ? undefined : "hover"}
+            layout
           >
-            <Link to="/category/$id" params={{ id: c.id }} className="card-glow group block rounded-xl border border-border bg-card p-5">
+            <Link
+              to="/category/$id"
+              params={{ id: c.id }}
+              className="card-glow group block rounded-xl border bg-card p-5 transition-colors duration-500"
+              style={{
+                borderColor: (activeCounts[c.id] ?? 0) > 0 ? "#3ECF8E" : "var(--color-border)",
+                boxShadow: (activeCounts[c.id] ?? 0) > 0
+                  ? "0 0 0 1px rgba(62,207,142,0.25), 0 0 14px rgba(62,207,142,0.18)"
+                  : undefined,
+              }}
+            >
               <div className="flex items-center justify-between">
                 <CategoryIcon name={c.name} color={c.color} size={32} />
                 <motion.span
                   variants={{ hover: { y: -3 } }}
-                  className="rounded-full bg-accent px-2 py-0.5 text-xs"
-                >{counts[c.id] || 0} items</motion.span>
+                  className="rounded-full px-2 py-0.5 text-xs transition-colors duration-500"
+                  style={{
+                    background: (activeCounts[c.id] ?? 0) > 0
+                      ? "rgba(62,207,142,0.15)"
+                      : "var(--color-accent)",
+                    color: (activeCounts[c.id] ?? 0) > 0 ? "#3ECF8E" : undefined,
+                  }}
+                >{counts[c.id] ?? 0} items</motion.span>
               </div>
               <p className="mt-3 font-semibold">{c.name}</p>
               <div className="mt-3 h-1 rounded-full" style={{ background: c.color, opacity: 0.6 }} />
