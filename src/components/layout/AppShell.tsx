@@ -29,15 +29,17 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!family) { setHasOpenTodo(false); return; }
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    const todayStr = () => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
     const check = async () => {
       const { count } = await supabase
         .from("todo_entries")
         .select("id", { count: "exact", head: true })
         .eq("family_id", family.id)
         .eq("is_completed", false)
-        .gte("created_at", todayStart.toISOString());
+        .eq("due_date", todayStr());
       setHasOpenTodo((count ?? 0) > 0);
     };
     check();
@@ -49,7 +51,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         () => check()
       )
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    // Refresh at next midnight so the dot resets for the new day
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(24, 0, 1, 0);
+    const midnight = setTimeout(() => check(), next.getTime() - now.getTime());
+    return () => { supabase.removeChannel(ch); clearTimeout(midnight); };
   }, [family]);
 
   const initials = (profile?.full_name || "U")

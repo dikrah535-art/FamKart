@@ -39,20 +39,35 @@ function TodoPage() {
 
   const load = async () => {
     if (!family) return;
+    const todayStart = `${today}T00:00:00`;
     const [t, m] = await Promise.all([
       supabase
         .from("todo_entries")
         .select("*")
         .eq("family_id", family.id)
-        .gte("created_at", `${today}T00:00:00`)
+        .eq("due_date", today)
         .order("created_at", { ascending: true }),
       supabase.from("profiles").select("id,full_name").eq("family_id", family.id),
     ]);
-    setTodos((t.data as Todo[]) ?? []);
+    // Midnight cleanup: hide tasks completed before today
+    const list = ((t.data as Todo[]) ?? []).filter(
+      (x) => !x.is_completed || (x.completed_at && x.completed_at >= todayStart),
+    );
+    setTodos(list);
     setMembers(m.data ?? []);
   };
 
   useEffect(() => { load(); }, [family]);
+
+  // Re-run at next midnight to clear completed tasks
+  useEffect(() => {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(24, 0, 1, 0);
+    const ms = next.getTime() - now.getTime();
+    const id = setTimeout(() => load(), ms);
+    return () => clearTimeout(id);
+  }, [family, todos]);
   useEffect(() => {
     if (!family) return;
     const ch = supabase
@@ -108,7 +123,14 @@ function TodoPage() {
   };
 
   const complete = async (t: Todo) => {
-    await updateTodo(t.id, { is_completed: true, completed_at: new Date().toISOString() });
+    const ts = new Date().toISOString();
+    // Optimistic UI update
+    setTodos((prev) => prev.map((x) => x.id === t.id ? { ...x, is_completed: true, completed_at: ts } : x));
+    // After strike-through (1s) fade & remove from view
+    setTimeout(() => {
+      setTodos((prev) => prev.filter((x) => x.id !== t.id));
+    }, 1400);
+    await updateTodo(t.id, { is_completed: true, completed_at: ts });
   };
 
   const remove = async (id: string) => {
@@ -191,7 +213,7 @@ function TodoPage() {
                       <motion.span
                         initial={{ width: 0 }}
                         animate={{ width: "100%" }}
-                        transition={{ duration: 0.6, ease: "easeInOut" }}
+                        transition={{ duration: 1, ease: "easeInOut" }}
                         className="pointer-events-none absolute left-0 top-1/2 h-[2px]"
                         style={{ background: "#3ECF8E" }}
                       />
