@@ -40,7 +40,7 @@ function Dashboard() {
         .eq("family_id", family.id)
         .gte(
           "purchased_at",
-          new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()
+          "2026-06-01T00:00:00.000Z"
         ),
     ]);
     setItems((it.data as Item[]) ?? []);
@@ -85,10 +85,14 @@ function Dashboard() {
   const urgentItems = items
     .filter((i) => i.priority === "urgent" && i.status !== "stocked")
     .slice(0, 8);
+  
+  // Real-time automatic removal updates for bottom feeds when marked as bought ("stocked")
   const myItems = items
     .filter((i) => i.assigned_to === user?.id && i.status !== "stocked")
     .slice(0, 5);
-  const recent = items.slice(0, 5);
+  const recent = items
+    .filter((i) => i.status !== "stocked")
+    .slice(0, 5);
 
   return (
     <div className="space-y-8">
