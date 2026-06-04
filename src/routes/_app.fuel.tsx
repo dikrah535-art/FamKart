@@ -1,0 +1,248 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { Fuel, Bus, Wrench, Car } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth-context";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { BackButton } from "@/components/BackButton";
+import { inr } from "@/lib/format";
+import { toast } from "sonner";
+import { friendlyError } from "@/lib/friendly-error";
+
+export const Route = createFileRoute("/_app/fuel")({ component: FuelPage });
+
+const PRICES = { Petrol: 100, Diesel: 90, CNG: 85 } as const;
+type FuelType = keyof typeof PRICES;
+
+type Hist = { id: string; item_name: string; cost: number | null; purchased_at: string };
+
+function FuelPage() {
+  const { family, user } = useAuth();
+  const [fuelType, setFuelType] = useState<FuelType>("Petrol");
+  const [litres, setLitres] = useState("");
+  const [cost, setCost] = useState("");
+  const [lastEdit, setLastEdit] = useState<"L" | "C">("L");
+  const [maint, setMaint] = useState("");
+  const [cab, setCab] = useState("");
+  const [hist, setHist] = useState<Hist[]>([]);
+  const [budget, setBudget] = useState(0);
+  const [spent, setSpent] = useState(0);
+
+  const price = PRICES[fuelType];
+
+  // bi-directional sync
+  useEffect(() => {
+    if (lastEdit !== "L") return;
+    const l = parseFloat(litres);
+    if (!isNaN(l) && l > 0) setCost((l * price).toFixed(2));
+    else if (litres === "") setCost("");
+  }, [litres, price, lastEdit]);
+  useEffect(() => {
+    if (lastEdit !== "C") return;
+    const c = parseFloat(cost);
+    if (!isNaN(c) && c > 0) setLitres((c / price).toFixed(2));
+    else if (cost === "") setLitres("");
+  }, [cost, price, lastEdit]);
+
+  const load = async () => {
+    if (!family) return;
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    const { data: all } = await supabase
+      .from("purchase_history")
+      .select("id,item_name,cost,purchased_at")
+      .eq("family_id", family.id)
+      .gte("purchased_at", monthStart)
+      .order("purchased_at", { ascending: false });
+    const list = (all as Hist[]) ?? [];
+    setHist(list.filter((h) => /^(Fuel|Transport):/i.test(h.item_name)).slice(0, 20));
+    setSpent(list.reduce((s, h) => s + (Number(h.cost) || 0), 0));
+    setBudget(Number(family.monthly_budget) || 0);
+  };
+  useEffect(() => { load(); }, [family]);
+
+  const remaining = Math.max(0, budget - spent);
+
+  const logFuel = async () => {
+    if (!family || !user) return;
+    const c = parseFloat(cost);
+    const l = parseFloat(litres);
+    if (!c || c <= 0 || !l || l <= 0) return toast.error("Enter litres or cost");
+    const { error } = await supabase.from("purchase_history").insert({
+      family_id: family.id,
+      item_name: `Fuel: ${fuelType} (${l.toFixed(2)} L)`,
+      cost: c,
+      quantity: l,
+      unit: "L",
+      purchased_by: user.id,
+    });
+    if (error) return toast.error(friendlyError(error));
+    toast.success(`Logged ₹${c.toFixed(0)} • ${l.toFixed(2)} L`);
+    setLitres(""); setCost("");
+    load();
+  };
+
+  const logTransport = async (kind: "Maintenance" | "Cab", amt: string, clear: () => void) => {
+    if (!family || !user) return;
+    const n = parseFloat(amt);
+    if (!n || n <= 0) return toast.error("Enter amount");
+    const { error } = await supabase.from("purchase_history").insert({
+      family_id: family.id,
+      item_name: `Transport: ${kind}`,
+      cost: n,
+      purchased_by: user.id,
+    });
+    if (error) return toast.error(friendlyError(error));
+    toast.success(`${kind} logged: ₹${n.toFixed(0)}`);
+    clear();
+    load();
+  };
+
+  return (
+    <div className="space-y-6">
+      <BackButton />
+      <header>
+        <h1 className="text-3xl font-bold">Fuel & Transport</h1>
+        <p className="text-sm text-muted-foreground">Track refills, fares and maintenance — auto-deducted from your monthly budget.</p>
+      </header>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Stat label="Monthly budget" value={inr(budget)} />
+        <Stat label="Spent this month" value={inr(spent)} accent />
+        <Stat label="Remaining" value={inr(remaining)} good />
+      </div>
+
+      <Tabs defaultValue="fuel">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="fuel"><Fuel className="mr-2 h-4 w-4" /> Fuel</TabsTrigger>
+          <TabsTrigger value="transport"><Bus className="mr-2 h-4 w-4" /> Transport</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="fuel" className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            {(Object.keys(PRICES) as FuelType[]).map((k) => (
+              <motion.button
+                key={k} type="button" onClick={() => setFuelType(k)}
+                whileHover={{ y: -2 }}
+                className={`rounded-xl border p-4 text-left transition-all ${
+                  fuelType === k
+                    ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(62,207,142,0.25)]"
+                    : "border-border bg-card hover:border-primary/40"
+                }`}
+              >
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">{k}</p>
+                <p className="mt-1 text-2xl font-bold">₹{PRICES[k]}<span className="text-sm font-normal text-muted-foreground">/L</span></p>
+              </motion.button>
+            ))}
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-5">
+            <h3 className="mb-4 font-semibold">Bi-directional calculator</h3>
+            <div className="grid gap-4 md:grid-cols-[1fr_auto_1fr_auto]">
+              <div>
+                <Label className="text-xs text-muted-foreground">Litres</Label>
+                <Input
+                  type="number" inputMode="decimal" placeholder="0"
+                  value={litres}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => { setLastEdit("L"); setLitres(e.target.value); }}
+                />
+              </div>
+              <div className="hidden self-end pb-2 text-muted-foreground md:block">×</div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Total cost (₹)</Label>
+                <Input
+                  type="number" inputMode="decimal" placeholder="0"
+                  value={cost}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => { setLastEdit("C"); setCost(e.target.value); }}
+                />
+              </div>
+              <div className="self-end">
+                <Button onClick={logFuel} className="w-full md:w-auto">Log refill</Button>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              {fuelType} @ ₹{price}/L — edit either field, the other updates instantly.
+            </p>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="transport" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <TransportCard
+              icon={<Wrench className="h-5 w-5 text-primary" />}
+              title="Maintenance"
+              desc="Servicing, repairs, parts"
+              value={maint} setValue={setMaint}
+              onSubmit={() => logTransport("Maintenance", maint, () => setMaint(""))}
+            />
+            <TransportCard
+              icon={<Car className="h-5 w-5 text-primary" />}
+              title="Cab / Auto"
+              desc="Ride fares, parking"
+              value={cab} setValue={setCab}
+              onSubmit={() => logTransport("Cab", cab, () => setCab(""))}
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      <div className="rounded-xl border border-border bg-card">
+        <div className="border-b border-border p-4 font-semibold">Recent entries (this month)</div>
+        {hist.length === 0 ? (
+          <p className="p-4 text-sm text-muted-foreground">No fuel or transport entries yet.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {hist.map((h) => (
+              <li key={h.id} className="flex items-center justify-between p-4">
+                <div>
+                  <p className="text-sm font-medium">{h.item_name}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(h.purchased_at).toLocaleString("en-IN")}</p>
+                </div>
+                <p className="font-semibold text-primary">{inr(Number(h.cost) || 0)}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, accent, good }: { label: string; value: string; accent?: boolean; good?: boolean }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={`mt-2 text-2xl font-bold ${good ? "text-primary" : accent ? "text-foreground" : ""}`}>{value}</p>
+    </div>
+  );
+}
+
+function TransportCard({
+  icon, title, desc, value, setValue, onSubmit,
+}: {
+  icon: React.ReactNode; title: string; desc: string;
+  value: string; setValue: (v: string) => void; onSubmit: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="flex items-center gap-2">{icon}<h3 className="font-semibold">{title}</h3></div>
+      <p className="mt-1 text-xs text-muted-foreground">{desc}</p>
+      <div className="mt-4 flex items-end gap-2">
+        <div className="flex-1">
+          <Label className="text-xs text-muted-foreground">Amount (₹)</Label>
+          <Input
+            type="number" inputMode="decimal" placeholder="0" value={value}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setValue(e.target.value)}
+          />
+        </div>
+        <Button onClick={onSubmit}>Log</Button>
+      </div>
+    </div>
+  );
+}
