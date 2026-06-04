@@ -74,24 +74,26 @@ function Dashboard() {
     return () => { supabase.removeChannel(ch); };
   }, [family]);
 
+  // Global Stat Counters
   const needed = items.filter((i) => i.status === "needed").length;
-  const urgent = items.filter((i) => i.priority === "urgent" && i.status !== "stocked").length;
+  const urgent = items.filter((i) => i.priority === "urgent" && i.status !== "bought" && i.status !== "stocked").length;
   const low = items.filter((i) => i.status === "low_stock").length;
+  
   const budgetUsed = family?.monthly_budget
     ? Math.round((purchasedTotal / Number(family.monthly_budget)) * 100)
     : 0;
   const budgetLabel = family?.monthly_budget ? `${budgetUsed}%` : inr(purchasedTotal);
 
   const urgentItems = items
-    .filter((i) => i.priority === "urgent" && i.status !== "stocked")
+    .filter((i) => i.priority === "urgent" && i.status !== "bought" && i.status !== "stocked")
     .slice(0, 8);
   
-  // Real-time automatic removal updates for bottom feeds when marked as bought ("stocked")
+  // Real-time feeds filtered to ignore anything bought or stocked
   const myItems = items
-    .filter((i) => i.assigned_to === user?.id && i.status !== "stocked")
+    .filter((i) => i.assigned_to === user?.id && i.status !== "bought" && i.status !== "stocked")
     .slice(0, 5);
   const recent = items
-    .filter((i) => i.status !== "stocked")
+    .filter((i) => i.status !== "bought" && i.status !== "stocked")
     .slice(0, 5);
 
   return (
@@ -139,14 +141,17 @@ function Dashboard() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
           {cats.map((c) => {
             const inCat = items.filter((i) => i.category_id === c.id);
+            
+            // STRICT DEFINITION: Active means it requires restocking right now
             const active = inCat.filter(
-              (i) => i.status !== "stocked" &&
-                (i.status === "needed" || i.status === "low_stock" || i.priority === "urgent")
+              (i) => i.status === "needed" || i.status === "low_stock" || (i.priority === "urgent" && i.status !== "bought" && i.status !== "stocked")
             );
             const activeCount = active.length;
             const hasActive = activeCount > 0;
-            const stocked = inCat.filter((i) => i.status === "stocked").length;
+            
+            const stocked = inCat.filter((i) => i.status === "stocked" || i.status === "bought").length;
             const pct = inCat.length ? Math.round((stocked / inCat.length) * 100) : 0;
+            
             return (
               <motion.div
                 key={c.id}
@@ -231,6 +236,7 @@ export function StatusPill({ status }: { status: string }) {
     needed: "bg-destructive/15 text-destructive",
     low_stock: "bg-warning/15 text-warning",
     stocked: "bg-primary/15 text-primary",
+    bought: "bg-primary/15 text-primary",
   };
   return (
     <span
