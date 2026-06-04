@@ -23,9 +23,11 @@ import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppNotebookRouteImport } from './routes/_app.notebook'
 import { Route as AppItemsRouteImport } from './routes/_app.items'
 import { Route as AppHistoryRouteImport } from './routes/_app.history'
+import { Route as AppFuelRouteImport } from './routes/_app.fuel'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppCategoriesRouteImport } from './routes/_app.categories'
 import { Route as AppBudgetRouteImport } from './routes/_app.budget'
+import { Route as AppBillsRouteImport } from './routes/_app.bills'
 import { Route as AppNotebookEntryRouteImport } from './routes/_app.notebook.entry'
 import { Route as AppCategoryIdRouteImport } from './routes/_app.category.$id'
 
@@ -98,6 +100,11 @@ const AppHistoryRoute = AppHistoryRouteImport.update({
   path: '/history',
   getParentRoute: () => AppRoute,
 } as any)
+const AppFuelRoute = AppFuelRouteImport.update({
+  id: '/fuel',
+  path: '/fuel',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -111,6 +118,11 @@ const AppCategoriesRoute = AppCategoriesRouteImport.update({
 const AppBudgetRoute = AppBudgetRouteImport.update({
   id: '/budget',
   path: '/budget',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBillsRoute = AppBillsRouteImport.update({
+  id: '/bills',
+  path: '/bills',
   getParentRoute: () => AppRoute,
 } as any)
 const AppNotebookEntryRoute = AppNotebookEntryRouteImport.update({
@@ -131,9 +143,11 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/bills': typeof AppBillsRoute
   '/budget': typeof AppBudgetRoute
   '/categories': typeof AppCategoriesRoute
   '/dashboard': typeof AppDashboardRoute
+  '/fuel': typeof AppFuelRoute
   '/history': typeof AppHistoryRoute
   '/items': typeof AppItemsRoute
   '/notebook': typeof AppNotebookRouteWithChildren
@@ -151,9 +165,11 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/bills': typeof AppBillsRoute
   '/budget': typeof AppBudgetRoute
   '/categories': typeof AppCategoriesRoute
   '/dashboard': typeof AppDashboardRoute
+  '/fuel': typeof AppFuelRoute
   '/history': typeof AppHistoryRoute
   '/items': typeof AppItemsRoute
   '/notebook': typeof AppNotebookRouteWithChildren
@@ -173,9 +189,11 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/_app/bills': typeof AppBillsRoute
   '/_app/budget': typeof AppBudgetRoute
   '/_app/categories': typeof AppCategoriesRoute
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/fuel': typeof AppFuelRoute
   '/_app/history': typeof AppHistoryRoute
   '/_app/items': typeof AppItemsRoute
   '/_app/notebook': typeof AppNotebookRouteWithChildren
@@ -195,9 +213,11 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/reset-password'
     | '/signup'
+    | '/bills'
     | '/budget'
     | '/categories'
     | '/dashboard'
+    | '/fuel'
     | '/history'
     | '/items'
     | '/notebook'
@@ -215,9 +235,11 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/reset-password'
     | '/signup'
+    | '/bills'
     | '/budget'
     | '/categories'
     | '/dashboard'
+    | '/fuel'
     | '/history'
     | '/items'
     | '/notebook'
@@ -236,9 +258,11 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/reset-password'
     | '/signup'
+    | '/_app/bills'
     | '/_app/budget'
     | '/_app/categories'
     | '/_app/dashboard'
+    | '/_app/fuel'
     | '/_app/history'
     | '/_app/items'
     | '/_app/notebook'
@@ -361,6 +385,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppHistoryRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/fuel': {
+      id: '/_app/fuel'
+      path: '/fuel'
+      fullPath: '/fuel'
+      preLoaderRoute: typeof AppFuelRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
@@ -380,6 +411,13 @@ declare module '@tanstack/react-router' {
       path: '/budget'
       fullPath: '/budget'
       preLoaderRoute: typeof AppBudgetRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/bills': {
+      id: '/_app/bills'
+      path: '/bills'
+      fullPath: '/bills'
+      preLoaderRoute: typeof AppBillsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/notebook/entry': {
@@ -412,9 +450,11 @@ const AppNotebookRouteWithChildren = AppNotebookRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppBillsRoute: typeof AppBillsRoute
   AppBudgetRoute: typeof AppBudgetRoute
   AppCategoriesRoute: typeof AppCategoriesRoute
   AppDashboardRoute: typeof AppDashboardRoute
+  AppFuelRoute: typeof AppFuelRoute
   AppHistoryRoute: typeof AppHistoryRoute
   AppItemsRoute: typeof AppItemsRoute
   AppNotebookRoute: typeof AppNotebookRouteWithChildren
@@ -425,9 +465,11 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppBillsRoute: AppBillsRoute,
   AppBudgetRoute: AppBudgetRoute,
   AppCategoriesRoute: AppCategoriesRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppFuelRoute: AppFuelRoute,
   AppHistoryRoute: AppHistoryRoute,
   AppItemsRoute: AppItemsRoute,
   AppNotebookRoute: AppNotebookRouteWithChildren,
@@ -452,3 +494,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
