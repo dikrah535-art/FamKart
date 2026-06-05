@@ -346,9 +346,11 @@ function NeededStat({ value, onClick, reduce }: { value: number; onClick: () => 
 function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => void; reduce: boolean }) {
   const [h, setH] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const hoverRef = useRef(false);
+  useEffect(() => { hoverRef.current = h; }, [h]);
 
   useEffect(() => {
-    if (!h || reduce) return;
+    if (reduce) return;
     const c = canvasRef.current;
     if (!c) return;
     const dpr = window.devicePixelRatio || 1;
@@ -364,6 +366,7 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
     const rings: Ring[] = [];
     let raf = 0;
     let frame = 0;
+    let running = false;
     const loop = () => {
       ctx.clearRect(0, 0, c.width, c.height);
       const w = c.width;
@@ -376,7 +379,10 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
         Math.hypot(tx, hh - ty),
         Math.hypot(w - tx, hh - ty),
       );
-      if (frame % 65 === 0) rings.push({ r: 4 * dpr, maxR, spd: maxR / 95 });
+      // Only spawn new rings while hovering — but always finish what we started.
+      if (hoverRef.current && frame % 65 === 0) {
+        rings.push({ r: 4 * dpr, maxR, spd: maxR / 95 });
+      }
       for (let i = rings.length - 1; i >= 0; i--) {
         const ring = rings[i];
         ring.r += ring.spd;
@@ -392,9 +398,18 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
         ctx.fill();
       }
       frame++;
+      if (hoverRef.current || rings.length > 0) {
+        raf = requestAnimationFrame(loop);
+      } else {
+        running = false;
+      }
+    };
+    const start = () => {
+      if (running) return;
+      running = true;
       raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
+    if (h) start();
     const ro = new ResizeObserver(resize);
     ro.observe(c);
     return () => { cancelAnimationFrame(raf); ro.disconnect(); };
