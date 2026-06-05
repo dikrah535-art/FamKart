@@ -159,8 +159,9 @@ function Dashboard() {
             const activeCount = active.length;
             const hasActive = activeCount > 0;
             
-            const stocked = inCat.filter((i) => i.status === "stocked" || i.status === "bought").length;
-            const pct = inCat.length ? Math.round((stocked / inCat.length) * 100) : 0;
+            // Green bar reflects how much of this category still needs buying.
+            // 0 items OR every item already stocked/bought → fully empty (neutral).
+            const pct = inCat.length ? Math.round((activeCount / inCat.length) * 100) : 0;
             
             return (
               <motion.div
@@ -192,8 +193,14 @@ function Dashboard() {
                     </span>
                   </div>
                   <p className="mt-2 font-semibold">{c.name}</p>
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-accent">
-                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+                  <div
+                    className="mt-3 h-1.5 overflow-hidden rounded-full transition-colors duration-500"
+                    style={{ background: hasActive ? "var(--color-accent)" : "#000" }}
+                  >
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: hasActive ? `${pct}%` : "0%", background: "#3ECF8E" }}
+                    />
                   </div>
                 </Link>
               </motion.div>
