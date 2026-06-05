@@ -170,7 +170,18 @@ function CategoriesPage() {
                 >{counts[c.id] ?? 0} items</motion.span>
               </div>
               <p className="mt-3 font-semibold">{c.name}</p>
-              <div className="mt-3 h-1 rounded-full" style={{ background: c.color, opacity: 0.6 }} />
+              <div
+                className="mt-3 h-1 overflow-hidden rounded-full transition-colors duration-500"
+                style={{ background: (activeCounts[c.id] ?? 0) > 0 ? "var(--color-accent)" : "#000" }}
+              >
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: (activeCounts[c.id] ?? 0) > 0 ? "100%" : "0%",
+                    background: "#3ECF8E",
+                  }}
+                />
+              </div>
             </Link>
           </motion.div>
         ))}

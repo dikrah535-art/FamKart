@@ -47,7 +47,8 @@ export function BoughtDialog({
       cost,
     });
     if (hErr) { setSaving(false); toast.error(friendlyError(hErr)); return; }
-    await supabase.from("items").update({ status: "stocked" }).eq("id", target.id);
+    // Remove from active items entirely — history is now the source of truth.
+    await supabase.from("items").delete().eq("id", target.id);
     if (cost > 0 && family.monthly_budget != null) {
       const next = Math.max(0, Number(family.monthly_budget) - cost);
       await supabase.from("families").update({ monthly_budget: next }).eq("id", family.id);

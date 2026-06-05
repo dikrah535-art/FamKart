@@ -159,8 +159,9 @@ function Dashboard() {
             const activeCount = active.length;
             const hasActive = activeCount > 0;
             
-            const stocked = inCat.filter((i) => i.status === "stocked" || i.status === "bought").length;
-            const pct = inCat.length ? Math.round((stocked / inCat.length) * 100) : 0;
+            // Green bar reflects how much of this category still needs buying.
+            // 0 items OR every item already stocked/bought → fully empty (neutral).
+            const pct = inCat.length ? Math.round((activeCount / inCat.length) * 100) : 0;
             
             return (
               <motion.div
@@ -192,8 +193,14 @@ function Dashboard() {
                     </span>
                   </div>
                   <p className="mt-2 font-semibold">{c.name}</p>
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-accent">
-                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+                  <div
+                    className="mt-3 h-1.5 overflow-hidden rounded-full transition-colors duration-500"
+                    style={{ background: hasActive ? "var(--color-accent)" : "#000" }}
+                  >
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: hasActive ? `${pct}%` : "0%", background: "#3ECF8E" }}
+                    />
                   </div>
                 </Link>
               </motion.div>
@@ -339,9 +346,11 @@ function NeededStat({ value, onClick, reduce }: { value: number; onClick: () => 
 function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => void; reduce: boolean }) {
   const [h, setH] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const hoverRef = useRef(false);
+  useEffect(() => { hoverRef.current = h; }, [h]);
 
   useEffect(() => {
-    if (!h || reduce) return;
+    if (reduce) return;
     const c = canvasRef.current;
     if (!c) return;
     const dpr = window.devicePixelRatio || 1;
@@ -357,6 +366,7 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
     const rings: Ring[] = [];
     let raf = 0;
     let frame = 0;
+    let running = false;
     const loop = () => {
       ctx.clearRect(0, 0, c.width, c.height);
       const w = c.width;
@@ -369,7 +379,10 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
         Math.hypot(tx, hh - ty),
         Math.hypot(w - tx, hh - ty),
       );
-      if (frame % 65 === 0) rings.push({ r: 4 * dpr, maxR, spd: maxR / 95 });
+      // Only spawn new rings while hovering — but always finish what we started.
+      if (hoverRef.current && frame % 65 === 0) {
+        rings.push({ r: 4 * dpr, maxR, spd: maxR / 95 });
+      }
       for (let i = rings.length - 1; i >= 0; i--) {
         const ring = rings[i];
         ring.r += ring.spd;
@@ -385,13 +398,25 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
         ctx.fill();
       }
       frame++;
+      if (hoverRef.current || rings.length > 0) {
+        raf = requestAnimationFrame(loop);
+      } else {
+        running = false;
+      }
+    };
+    const start = () => {
+      if (running) return;
+      running = true;
       raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
+    // Kick the loop whenever hover flips true; the loop self-stops once
+    // rings have drained and hover is false, so existing sweeps always finish.
+    const interval = setInterval(() => { if (hoverRef.current) start(); }, 80);
+    if (h) start();
     const ro = new ResizeObserver(resize);
     ro.observe(c);
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
-  }, [h, reduce]);
+    return () => { cancelAnimationFrame(raf); clearInterval(interval); ro.disconnect(); };
+  }, [reduce]);
 
   return (
     <StatShell label="Urgent" value={value} onClick={onClick} glow="#EF4444" hovering={h} setHovering={setH}>
@@ -419,7 +444,7 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
-    if (reduce) return;
+    if (reduce || !h) return;
     const c = canvasRef.current;
     if (!c) return;
     const dpr = window.devicePixelRatio || 1;
@@ -431,9 +456,10 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
     resize();
     const ctx = c.getContext("2d");
     if (!ctx) return;
+    // Clean stock-downwards trend curve — gentle steps down, no jitter back up.
     const pts: [number, number][] = [
-      [0.02, 0.12], [0.1, 0.06], [0.2, 0.22], [0.3, 0.13], [0.42, 0.34],
-      [0.53, 0.22], [0.63, 0.47], [0.74, 0.34], [0.83, 0.58], [0.91, 0.47], [1, 0.82],
+      [0.0, 0.10], [0.15, 0.22], [0.3, 0.32], [0.45, 0.46],
+      [0.6, 0.58], [0.75, 0.72], [0.88, 0.84], [1.0, 0.92],
     ];
     let sp = 0;
     let raf = 0;
@@ -493,22 +519,23 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
       ctx.closePath();
       ctx.fill();
       ctx.restore();
-      sp += 0.007;
-      if (sp >= 1) sp = 0;
+      // Slower, smoother sweep; once it completes, gracefully restart.
+      sp += 0.011;
+      if (sp >= 1.12) sp = 0;
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
     const ro = new ResizeObserver(resize);
     ro.observe(c);
     return () => { cancelAnimationFrame(raf); ro.disconnect(); };
-  }, [reduce]);
+  }, [reduce, h]);
 
   return (
     <StatShell label="Low stock" value={value} onClick={onClick} glow="#F59E0B" hovering={h} setHovering={setH}>
       <canvas
         ref={canvasRef}
         className="pointer-events-none absolute"
-        style={{ right: 0, bottom: 0, width: "100%", height: "60%" }}
+        style={{ right: 8, top: 6, width: 70, height: 34 }}
       />
     </StatShell>
   );
@@ -535,24 +562,27 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
     const notes: Note[] = [];
     let raf = 0;
     let frame = 0;
-    const DELAY = Math.ceil((650 / 1000) * 60);
+    // Wait for the wallet flap to swing open before the shower starts.
+    const DELAY = Math.ceil((900 / 1000) * 60);
     const loop = () => {
       ctx.clearRect(0, 0, c.width, c.height);
-      const ox = c.width - 28 * dpr;
+      // Spawn the bills from the LEFT-opening flap's mouth.
+      const ox = c.width - 32 * dpr;
       const oy = 16 * dpr;
-      if (frame > DELAY && Math.random() < 0.30) {
+      // Substantially slower, calmer spawn cadence.
+      if (frame > DELAY && Math.random() < 0.11) {
         notes.push({
           x: ox, y: oy,
-          vx: (Math.random() - 0.5) * 1.1 * dpr,
-          vy: (0.9 + Math.random() * 1.6) * dpr,
+          vx: (Math.random() - 0.5) * 0.45 * dpr,
+          vy: (0.25 + Math.random() * 0.45) * dpr,
           r: Math.random() * Math.PI * 2,
-          rs: (Math.random() - 0.5) * 2.5 * (Math.PI / 180),
+          rs: (Math.random() - 0.5) * 1.1 * (Math.PI / 180),
           s: 8 + Math.random() * 4,
         });
       }
       for (let i = notes.length - 1; i >= 0; i--) {
         const n = notes[i];
-        n.vy += 0.018 * dpr;
+        n.vy += 0.006 * dpr;
         n.x += n.vx;
         n.y += n.vy;
         n.r += n.rs;
@@ -622,11 +652,19 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
             position: "absolute", inset: 0,
             background: "linear-gradient(145deg,#9333EA,#7C3AED)",
             borderRadius: 5,
-            transformOrigin: "right center",
-            animation: !reduce && h ? "wLeft 0.7s ease-out forwards" : undefined,
+            transformOrigin: "left center",
+            animation: !reduce && h ? "wOpenLeft 2.6s ease-in-out infinite" : undefined,
             transform: !reduce && h ? undefined : "rotateY(0deg)",
           }}
         />
+        <style>{`
+          @keyframes wOpenLeft {
+            0%   { transform: rotateY(0deg); }
+            18%  { transform: rotateY(-150deg); }
+            78%  { transform: rotateY(-150deg); }
+            100% { transform: rotateY(0deg); }
+          }
+        `}</style>
       </div>
     </StatShell>
   );
