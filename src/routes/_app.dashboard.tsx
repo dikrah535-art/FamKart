@@ -559,24 +559,27 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
     const notes: Note[] = [];
     let raf = 0;
     let frame = 0;
-    const DELAY = Math.ceil((650 / 1000) * 60);
+    // Wait for the wallet flap to swing open before the shower starts.
+    const DELAY = Math.ceil((900 / 1000) * 60);
     const loop = () => {
       ctx.clearRect(0, 0, c.width, c.height);
-      const ox = c.width - 28 * dpr;
+      // Spawn the bills from the LEFT-opening flap's mouth.
+      const ox = c.width - 32 * dpr;
       const oy = 16 * dpr;
-      if (frame > DELAY && Math.random() < 0.30) {
+      // Substantially slower, calmer spawn cadence.
+      if (frame > DELAY && Math.random() < 0.11) {
         notes.push({
           x: ox, y: oy,
-          vx: (Math.random() - 0.5) * 1.1 * dpr,
-          vy: (0.9 + Math.random() * 1.6) * dpr,
+          vx: (Math.random() - 0.5) * 0.45 * dpr,
+          vy: (0.25 + Math.random() * 0.45) * dpr,
           r: Math.random() * Math.PI * 2,
-          rs: (Math.random() - 0.5) * 2.5 * (Math.PI / 180),
+          rs: (Math.random() - 0.5) * 1.1 * (Math.PI / 180),
           s: 8 + Math.random() * 4,
         });
       }
       for (let i = notes.length - 1; i >= 0; i--) {
         const n = notes[i];
-        n.vy += 0.018 * dpr;
+        n.vy += 0.006 * dpr;
         n.x += n.vx;
         n.y += n.vy;
         n.r += n.rs;
@@ -646,11 +649,19 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
             position: "absolute", inset: 0,
             background: "linear-gradient(145deg,#9333EA,#7C3AED)",
             borderRadius: 5,
-            transformOrigin: "right center",
-            animation: !reduce && h ? "wLeft 0.7s ease-out forwards" : undefined,
+            transformOrigin: "left center",
+            animation: !reduce && h ? "wOpenLeft 2.6s ease-in-out infinite" : undefined,
             transform: !reduce && h ? undefined : "rotateY(0deg)",
           }}
         />
+        <style>{`
+          @keyframes wOpenLeft {
+            0%   { transform: rotateY(0deg); }
+            18%  { transform: rotateY(-150deg); }
+            78%  { transform: rotateY(-150deg); }
+            100% { transform: rotateY(0deg); }
+          }
+        `}</style>
       </div>
     </StatShell>
   );
