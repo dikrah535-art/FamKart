@@ -41,6 +41,24 @@ function BudgetPage() {
   };
   useEffect(() => { load(); }, [family]);
 
+  useEffect(() => {
+    if (!family) return;
+    const ch = supabase
+      .channel(`budget:${family.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "purchase_history", filter: `family_id=eq.${family.id}` },
+        () => load()
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "families", filter: `id=eq.${family.id}` },
+        () => { refresh(); load(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [family]);
+
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const monthHist = hist.filter((h) => new Date(h.purchased_at) >= monthStart);
   const monthSpend = monthHist.reduce((s, h) => s + (Number(h.cost) || 0), 0);
