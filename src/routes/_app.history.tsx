@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { RotateCcw, Search } from "lucide-react";
+import { RotateCcw, Search, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,11 @@ import { Button } from "@/components/ui/button";
 import { fmtDate, inr } from "@/lib/format";
 import { toast } from "sonner";
 import { BackButton } from "@/components/BackButton";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { friendlyError } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/_app/history")({ component: HistoryPage });
 
@@ -19,11 +24,14 @@ type Row = {
 };
 
 function HistoryPage() {
-  const { family, user } = useAuth();
+  const { family, user, refresh } = useAuth();
   const [rows, setRows] = useState<Row[]>([]);
   const [members, setMembers] = useState<Record<string, string>>({});
   const [cats, setCats] = useState<Record<string, { name: string; icon: string }>>({});
   const [search, setSearch] = useState("");
+  const [toDelete, setToDelete] = useState<Row | null>(null);
+  const [confirmText, setConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     if (!family) return;
@@ -50,6 +58,26 @@ function HistoryPage() {
       priority: "normal", estimated_cost: r.cost ?? 0, created_by: user.id,
     });
     toast.success(`${r.item_name} re-added`);
+  };
+
+  const openDelete = (r: Row) => { setToDelete(r); setConfirmText(""); };
+
+  const confirmDelete = async () => {
+    if (!toDelete || !family) return;
+    setDeleting(true);
+    const cost = Number(toDelete.cost) || 0;
+    const { error } = await supabase.from("purchase_history").delete().eq("id", toDelete.id);
+    if (error) { setDeleting(false); toast.error(friendlyError(error)); return; }
+    if (cost > 0 && family.monthly_budget != null) {
+      const next = Number(family.monthly_budget) + cost;
+      await supabase.from("families").update({ monthly_budget: next }).eq("id", family.id);
+      await refresh();
+    }
+    setRows((prev) => prev.filter((x) => x.id !== toDelete.id));
+    toast.success(`Deleted ${toDelete.item_name} • ${inr(cost)} refunded`);
+    setDeleting(false);
+    setToDelete(null);
+    setConfirmText("");
   };
 
   return (
@@ -105,10 +133,51 @@ function HistoryPage() {
             <div className="flex items-center gap-3">
               <span className="text-sm font-semibold text-primary">{inr(Number(r.cost) || 0)}</span>
               <Button size="sm" variant="ghost" onClick={() => reorder(r)}><RotateCcw className="mr-1 h-3 w-3" /> Reorder</Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => openDelete(r)}
+                className="border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="mr-1 h-3 w-3" /> Delete
+              </Button>
             </div>
           </motion.div>
         ))}
       </div>
+
+      <Dialog open={!!toDelete} onOpenChange={(o) => { if (!o) { setToDelete(null); setConfirmText(""); } }}>
+        <DialogContent className="sm:max-w-md border-border/60 bg-card/80 backdrop-blur-xl">
+          <DialogHeader>
+            <DialogTitle>Delete purchase?</DialogTitle>
+            <DialogDescription>
+              {toDelete && (
+                <>Are you sure you want to delete <span className="font-semibold text-foreground">{toDelete.item_name}</span>? This will permanently remove the record and refund <span className="font-semibold text-primary">{inr(Number(toDelete.cost) || 0)}</span> to your budget.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Type the name of the item to confirm</Label>
+            <Input
+              autoFocus
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder={toDelete?.item_name ?? ""}
+              className="bg-background/40 backdrop-blur"
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => { setToDelete(null); setConfirmText(""); }}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={deleting || !toDelete || confirmText !== toDelete.item_name}
+              onClick={confirmDelete}
+            >
+              {deleting ? "Deleting…" : "Delete & Refund"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
