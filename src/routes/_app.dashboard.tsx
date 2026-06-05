@@ -441,7 +441,7 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
-    if (reduce) return;
+    if (reduce || !h) return;
     const c = canvasRef.current;
     if (!c) return;
     const dpr = window.devicePixelRatio || 1;
@@ -453,9 +453,10 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
     resize();
     const ctx = c.getContext("2d");
     if (!ctx) return;
+    // Clean stock-downwards trend curve — gentle steps down, no jitter back up.
     const pts: [number, number][] = [
-      [0.02, 0.12], [0.1, 0.06], [0.2, 0.22], [0.3, 0.13], [0.42, 0.34],
-      [0.53, 0.22], [0.63, 0.47], [0.74, 0.34], [0.83, 0.58], [0.91, 0.47], [1, 0.82],
+      [0.0, 0.10], [0.15, 0.22], [0.3, 0.32], [0.45, 0.46],
+      [0.6, 0.58], [0.75, 0.72], [0.88, 0.84], [1.0, 0.92],
     ];
     let sp = 0;
     let raf = 0;
@@ -515,22 +516,23 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
       ctx.closePath();
       ctx.fill();
       ctx.restore();
-      sp += 0.007;
-      if (sp >= 1) sp = 0;
+      // Slower, smoother sweep; once it completes, gracefully restart.
+      sp += 0.011;
+      if (sp >= 1.12) sp = 0;
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
     const ro = new ResizeObserver(resize);
     ro.observe(c);
     return () => { cancelAnimationFrame(raf); ro.disconnect(); };
-  }, [reduce]);
+  }, [reduce, h]);
 
   return (
     <StatShell label="Low stock" value={value} onClick={onClick} glow="#F59E0B" hovering={h} setHovering={setH}>
       <canvas
         ref={canvasRef}
         className="pointer-events-none absolute"
-        style={{ right: 0, bottom: 0, width: "100%", height: "60%" }}
+        style={{ right: 8, top: 6, width: 70, height: 34 }}
       />
     </StatShell>
   );
