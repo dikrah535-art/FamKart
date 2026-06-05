@@ -409,11 +409,14 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
       running = true;
       raf = requestAnimationFrame(loop);
     };
+    // Kick the loop whenever hover flips true; the loop self-stops once
+    // rings have drained and hover is false, so existing sweeps always finish.
+    const interval = setInterval(() => { if (hoverRef.current) start(); }, 80);
     if (h) start();
     const ro = new ResizeObserver(resize);
     ro.observe(c);
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
-  }, [h, reduce]);
+    return () => { cancelAnimationFrame(raf); clearInterval(interval); ro.disconnect(); };
+  }, [reduce]);
 
   return (
     <StatShell label="Urgent" value={value} onClick={onClick} glow="#EF4444" hovering={h} setHovering={setH}>
