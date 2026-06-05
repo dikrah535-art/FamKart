@@ -70,6 +70,16 @@ function Dashboard() {
         { event: "*", schema: "public", table: "items", filter: `family_id=eq.${family.id}` },
         () => load()
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "purchase_history", filter: `family_id=eq.${family.id}` },
+        () => load()
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "families", filter: `id=eq.${family.id}` },
+        () => load()
+      )
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [family]);
