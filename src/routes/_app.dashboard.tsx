@@ -319,9 +319,9 @@ function StatShell({
 }
 
 function NeededStat({ value, onClick, reduce }: { value: number; onClick: () => void; reduce: boolean }) {
-  const [h, setH] = useState(false);
+  const { active: h, onMouseEnter, onMouseLeave } = useHoverLatch(1800);
   return (
-    <StatShell label="Items needed" value={value} onClick={onClick} glow="#3ECF8E" hovering={h} setHovering={setH}>
+    <StatShell label="Items needed" value={value} onClick={onClick} glow="#3ECF8E" hovering={h} onEnter={onMouseEnter} onLeave={onMouseLeave}>
       <div
         className="cardbox"
         style={{ position: "absolute", top: 10, right: 10, width: 38, height: 38, perspective: 220 }}
