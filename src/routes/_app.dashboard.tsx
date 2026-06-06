@@ -11,6 +11,27 @@ import { requeueRecurringItems } from "@/lib/recurring";
 
 export const Route = createFileRoute("/_app/dashboard")({ component: Dashboard });
 
+/* Hover latch: stays "active" until the in-flight animation cycle completes,
+   so leaving the card never snaps an animation mid-flight. */
+function useHoverLatch(cycleMs: number) {
+  const [active, setActive] = useState(false);
+  const startRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onMouseEnter = () => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (!active) startRef.current = performance.now();
+    setActive(true);
+  };
+  const onMouseLeave = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    const elapsed = performance.now() - startRef.current;
+    const remaining = cycleMs - (elapsed % cycleMs);
+    timerRef.current = setTimeout(() => setActive(false), Math.max(120, remaining));
+  };
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  return { active, onMouseEnter, onMouseLeave };
+}
+
 type Item = {
   id: string; name: string; status: string; priority: string;
   category_id: string | null; assigned_to: string | null; created_at: string;
@@ -269,21 +290,22 @@ export function StatusPill({ status }: { status: string }) {
 /* ============ Animated Stat Cards ============ */
 
 function StatShell({
-  label, value, onClick, glow, hovering, setHovering, children,
+  label, value, onClick, glow, hovering, onEnter, onLeave, children,
 }: {
   label: string; value: number | string; onClick: () => void; glow: string;
-  hovering: boolean; setHovering: (b: boolean) => void; children: ReactNode;
+  hovering: boolean; onEnter: () => void; onLeave: () => void; children: ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
       className="relative overflow-hidden rounded-xl border bg-card p-4 text-left transition-all hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       style={{
         borderColor: hovering ? glow : "var(--color-border)",
         boxShadow: hovering ? `0 0 20px ${glow}66` : undefined,
+        transition: "border-color .4s ease, box-shadow .4s ease, transform .2s ease",
         minHeight: 110,
       }}
     >
@@ -297,9 +319,9 @@ function StatShell({
 }
 
 function NeededStat({ value, onClick, reduce }: { value: number; onClick: () => void; reduce: boolean }) {
-  const [h, setH] = useState(false);
+  const { active: h, onMouseEnter, onMouseLeave } = useHoverLatch(1800);
   return (
-    <StatShell label="Items needed" value={value} onClick={onClick} glow="#3ECF8E" hovering={h} setHovering={setH}>
+    <StatShell label="Items needed" value={value} onClick={onClick} glow="#3ECF8E" hovering={h} onEnter={onMouseEnter} onLeave={onMouseLeave}>
       <div
         className="cardbox"
         style={{ position: "absolute", top: 10, right: 10, width: 38, height: 38, perspective: 220 }}
@@ -344,7 +366,7 @@ function NeededStat({ value, onClick, reduce }: { value: number; onClick: () => 
 }
 
 function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => void; reduce: boolean }) {
-  const [h, setH] = useState(false);
+  const { active: h, onMouseEnter, onMouseLeave } = useHoverLatch(1100);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const hoverRef = useRef(false);
   useEffect(() => { hoverRef.current = h; }, [h]);
@@ -419,7 +441,7 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
   }, [reduce]);
 
   return (
-    <StatShell label="Urgent" value={value} onClick={onClick} glow="#EF4444" hovering={h} setHovering={setH}>
+    <StatShell label="Urgent" value={value} onClick={onClick} glow="#EF4444" hovering={h} onEnter={onMouseEnter} onLeave={onMouseLeave}>
       <canvas
         ref={canvasRef}
         className="pointer-events-none"
@@ -440,7 +462,7 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
 }
 
 function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () => void; reduce: boolean }) {
-  const [h, setH] = useState(false);
+  const { active: h, onMouseEnter, onMouseLeave } = useHoverLatch(1700);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -456,10 +478,13 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
     resize();
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    // Clean stock-downwards trend curve — gentle steps down, no jitter back up.
+    // Bold jagged descending stock-market trend — sharp zig-zag, net downward,
+    // ending at the bottom-right where the arrowhead lands.
     const pts: [number, number][] = [
-      [0.0, 0.10], [0.15, 0.22], [0.3, 0.32], [0.45, 0.46],
-      [0.6, 0.58], [0.75, 0.72], [0.88, 0.84], [1.0, 0.92],
+      [0.00, 0.12], [0.10, 0.34], [0.20, 0.20],
+      [0.32, 0.46], [0.42, 0.30], [0.54, 0.58],
+      [0.66, 0.42], [0.78, 0.70], [0.88, 0.56],
+      [1.00, 0.90],
     ];
     let sp = 0;
     let raf = 0;
@@ -477,7 +502,7 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
       const total = abs.length - 1;
       const upto = total * Math.min(1, sp);
       ctx.strokeStyle = "#F59E0B";
-      ctx.lineWidth = 2.2 * dpr;
+      ctx.lineWidth = 3.2 * dpr;
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
       ctx.beginPath();
@@ -500,27 +525,27 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
         }
       }
       ctx.stroke();
-      // glow
-      ctx.fillStyle = "rgba(245,158,11,0.2)";
+      // glow halo around moving tip
+      ctx.fillStyle = "rgba(245,158,11,0.22)";
       ctx.beginPath();
-      ctx.arc(tipX, tipY, 9 * dpr, 0, Math.PI * 2);
+      ctx.arc(tipX, tipY, 11 * dpr, 0, Math.PI * 2);
       ctx.fill();
-      // directional arrow
+      // Bold directional arrowhead — angled down-right
       const angle = Math.atan2(tipY - prevY, tipX - prevX);
-      const a = 9 * dpr;
+      const a = 12 * dpr;
       ctx.save();
       ctx.translate(tipX, tipY);
       ctx.rotate(angle);
       ctx.fillStyle = "#F59E0B";
       ctx.beginPath();
       ctx.moveTo(a, 0);
-      ctx.lineTo(-a * 0.7, -a * 0.6);
-      ctx.lineTo(-a * 0.7, a * 0.6);
+      ctx.lineTo(-a * 0.75, -a * 0.7);
+      ctx.lineTo(-a * 0.75, a * 0.7);
       ctx.closePath();
       ctx.fill();
       ctx.restore();
-      // Slower, smoother sweep; once it completes, gracefully restart.
-      sp += 0.011;
+      // Sweep ~1.6s per cycle. Hover-latch keeps us alive until cycle ends.
+      sp += 0.012;
       if (sp >= 1.12) sp = 0;
       raf = requestAnimationFrame(draw);
     };
@@ -531,18 +556,18 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
   }, [reduce, h]);
 
   return (
-    <StatShell label="Low stock" value={value} onClick={onClick} glow="#F59E0B" hovering={h} setHovering={setH}>
+    <StatShell label="Low stock" value={value} onClick={onClick} glow="#F59E0B" hovering={h} onEnter={onMouseEnter} onLeave={onMouseLeave}>
       <canvas
         ref={canvasRef}
         className="pointer-events-none absolute"
-        style={{ right: 8, top: 6, width: 70, height: 34 }}
+        style={{ right: 8, top: "50%", transform: "translateY(-50%)", width: 130, height: 70, opacity: h ? 1 : 0.55, transition: "opacity .5s ease" }}
       />
     </StatShell>
   );
 }
 
 function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => void; reduce: boolean }) {
-  const [h, setH] = useState(false);
+  const { active: h, onMouseEnter, onMouseLeave } = useHoverLatch(2600);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -628,7 +653,7 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
   }, [h, reduce]);
 
   return (
-    <StatShell label="Budget used" value={value} onClick={onClick} glow="#7C3AED" hovering={h} setHovering={setH}>
+    <StatShell label="Budget used" value={value} onClick={onClick} glow="#7C3AED" hovering={h} onEnter={onMouseEnter} onLeave={onMouseLeave}>
       <canvas
         ref={canvasRef}
         className="pointer-events-none"
