@@ -567,7 +567,7 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
 }
 
 function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => void; reduce: boolean }) {
-  const [h, setH] = useState(false);
+  const { active: h, onMouseEnter, onMouseLeave } = useHoverLatch(2600);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -653,7 +653,7 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
   }, [h, reduce]);
 
   return (
-    <StatShell label="Budget used" value={value} onClick={onClick} glow="#7C3AED" hovering={h} setHovering={setH}>
+    <StatShell label="Budget used" value={value} onClick={onClick} glow="#7C3AED" hovering={h} onEnter={onMouseEnter} onLeave={onMouseLeave}>
       <canvas
         ref={canvasRef}
         className="pointer-events-none"
