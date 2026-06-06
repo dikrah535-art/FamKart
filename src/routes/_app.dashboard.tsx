@@ -462,11 +462,13 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
 }
 
 function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () => void; reduce: boolean }) {
-  const { active: h, onMouseEnter, onMouseLeave } = useHoverLatch(1700);
+  const [h, setH] = useState(false);
+  const hoverRef = useRef(false);
+  useEffect(() => { hoverRef.current = h; }, [h]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
-    if (reduce || !h) return;
+    if (reduce) return;
     const c = canvasRef.current;
     if (!c) return;
     const dpr = window.devicePixelRatio || 1;
@@ -478,63 +480,34 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
     resize();
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    // Bold jagged descending stock-market trend — sharp zig-zag, net downward,
-    // ending at the bottom-right where the arrowhead lands.
+    // Jagged descending trend — always visible. The "sp" highlight only animates on hover.
     const pts: [number, number][] = [
       [0.00, 0.12], [0.10, 0.34], [0.20, 0.20],
       [0.32, 0.46], [0.42, 0.30], [0.54, 0.58],
       [0.66, 0.42], [0.78, 0.70], [0.88, 0.56],
       [1.00, 0.90],
     ];
+    // sweeping highlight position 0..1; sweeping flag = currently in an in-flight cycle
     let sp = 0;
+    let sweeping = false;
     let raf = 0;
-    const draw = () => {
-      const w = c.width;
-      const hh = c.height;
-      ctx.clearRect(0, 0, w, hh);
-      ctx.strokeStyle = "rgba(245,158,11,0.10)";
-      ctx.lineWidth = 0.5 * dpr;
-      for (let i = 1; i < 4; i++) {
-        const y = (i / 4) * hh;
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-      }
-      const abs = pts.map(([x, y]) => [x * w, y * hh] as [number, number]);
-      const total = abs.length - 1;
-      const upto = total * Math.min(1, sp);
+    const STEP = 0.0032; // slow, premium pace (~5s per full cycle at 60fps)
+    const drawStaticLine = (w: number, hh: number, abs: [number, number][]) => {
       ctx.strokeStyle = "#F59E0B";
       ctx.lineWidth = 3.2 * dpr;
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
       ctx.beginPath();
       ctx.moveTo(abs[0][0], abs[0][1]);
-      let tipX = abs[0][0], tipY = abs[0][1], prevX = abs[0][0], prevY = abs[0][1];
-      for (let i = 1; i < abs.length; i++) {
-        if (i <= upto) {
-          prevX = abs[i - 1][0]; prevY = abs[i - 1][1];
-          ctx.lineTo(abs[i][0], abs[i][1]);
-          tipX = abs[i][0]; tipY = abs[i][1];
-        } else {
-          const frac = upto - (i - 1);
-          if (frac > 0) {
-            prevX = abs[i - 1][0]; prevY = abs[i - 1][1];
-            tipX = prevX + (abs[i][0] - prevX) * frac;
-            tipY = prevY + (abs[i][1] - prevY) * frac;
-            ctx.lineTo(tipX, tipY);
-          }
-          break;
-        }
-      }
+      for (let i = 1; i < abs.length; i++) ctx.lineTo(abs[i][0], abs[i][1]);
       ctx.stroke();
-      // glow halo around moving tip
-      ctx.fillStyle = "rgba(245,158,11,0.22)";
-      ctx.beginPath();
-      ctx.arc(tipX, tipY, 11 * dpr, 0, Math.PI * 2);
-      ctx.fill();
-      // Bold directional arrowhead — angled down-right
-      const angle = Math.atan2(tipY - prevY, tipX - prevX);
+      // Stationary arrowhead at the end
+      const last = abs[abs.length - 1];
+      const prev = abs[abs.length - 2];
+      const angle = Math.atan2(last[1] - prev[1], last[0] - prev[0]);
       const a = 12 * dpr;
       ctx.save();
-      ctx.translate(tipX, tipY);
+      ctx.translate(last[0], last[1]);
       ctx.rotate(angle);
       ctx.fillStyle = "#F59E0B";
       ctx.beginPath();
@@ -544,34 +517,92 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
       ctx.closePath();
       ctx.fill();
       ctx.restore();
-      // Sweep ~1.6s per cycle. Hover-latch keeps us alive until cycle ends.
-      sp += 0.012;
-      if (sp >= 1.12) sp = 0;
+    };
+    const draw = () => {
+      const w = c.width;
+      const hh = c.height;
+      ctx.clearRect(0, 0, w, hh);
+      // grid
+      ctx.strokeStyle = "rgba(245,158,11,0.10)";
+      ctx.lineWidth = 0.5 * dpr;
+      for (let i = 1; i < 4; i++) {
+        const y = (i / 4) * hh;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+      const abs = pts.map(([x, y]) => [x * w, y * hh] as [number, number]);
+      // Begin a sweep only when hovered; complete-in-flight sweeps always finish.
+      if (hoverRef.current && !sweeping) { sweeping = true; sp = 0; }
+      // Always render the static line first as the resting state.
+      drawStaticLine(w, hh, abs);
+      if (sweeping) {
+        const total = abs.length - 1;
+        const upto = total * Math.min(1, sp);
+        // Highlighted glowing overlay segment
+        ctx.save();
+        ctx.shadowColor = "rgba(245,158,11,0.85)";
+        ctx.shadowBlur = 14;
+        ctx.strokeStyle = "#FCD34D";
+        ctx.lineWidth = 3.6 * dpr;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(abs[0][0], abs[0][1]);
+        let tipX = abs[0][0], tipY = abs[0][1];
+        for (let i = 1; i < abs.length; i++) {
+          if (i <= upto) {
+            ctx.lineTo(abs[i][0], abs[i][1]);
+            tipX = abs[i][0]; tipY = abs[i][1];
+          } else {
+            const frac = upto - (i - 1);
+            if (frac > 0) {
+              const prevX = abs[i - 1][0], prevY = abs[i - 1][1];
+              tipX = prevX + (abs[i][0] - prevX) * frac;
+              tipY = prevY + (abs[i][1] - prevY) * frac;
+              ctx.lineTo(tipX, tipY);
+            }
+            break;
+          }
+        }
+        ctx.stroke();
+        // moving tip halo
+        ctx.fillStyle = "rgba(252,211,77,0.55)";
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, 6 * dpr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        sp += STEP;
+        if (sp >= 1) {
+          // Finished iteration: if still hovered, start another cycle; else, settle to static.
+          if (hoverRef.current) { sp = 0; } else { sweeping = false; sp = 0; }
+        }
+      }
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
     const ro = new ResizeObserver(resize);
     ro.observe(c);
     return () => { cancelAnimationFrame(raf); ro.disconnect(); };
-  }, [reduce, h]);
+  }, [reduce]);
 
   return (
-    <StatShell label="Low stock" value={value} onClick={onClick} glow="#F59E0B" hovering={h} onEnter={onMouseEnter} onLeave={onMouseLeave}>
+    <StatShell label="Low stock" value={value} onClick={onClick} glow="#F59E0B" hovering={h} onEnter={() => setH(true)} onLeave={() => setH(false)}>
       <canvas
         ref={canvasRef}
         className="pointer-events-none absolute"
-        style={{ right: 8, top: "50%", transform: "translateY(-50%)", width: 130, height: 70, opacity: h ? 1 : 0.55, transition: "opacity .5s ease" }}
+        style={{ right: 8, top: "50%", transform: "translateY(-50%)", width: 130, height: 70, opacity: h ? 1 : 0.9, transition: "opacity .5s ease" }}
       />
     </StatShell>
   );
 }
 
 function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => void; reduce: boolean }) {
-  const { active: h, onMouseEnter, onMouseLeave } = useHoverLatch(2600);
+  const [h, setH] = useState(false);
+  const hoverRef = useRef(false);
+  useEffect(() => { hoverRef.current = h; }, [h]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
-    if (!h || reduce) return;
+    if (reduce) return;
     const c = canvasRef.current;
     if (!c) return;
     const dpr = window.devicePixelRatio || 1;
@@ -583,19 +614,23 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
     resize();
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    type Note = { x: number; y: number; vx: number; vy: number; r: number; rs: number; s: number };
+    type Note = {
+      x: number; y: number; vx: number; vy: number; r: number; rs: number; s: number;
+      landed: boolean; alpha: number;
+    };
     const notes: Note[] = [];
     let raf = 0;
     let frame = 0;
-    // Wait for the wallet flap to swing open before the shower starts.
-    const DELAY = Math.ceil((900 / 1000) * 60);
+    let hoverFrames = 0;
+    const SPAWN_DELAY = Math.ceil((900 / 1000) * 60);
     const loop = () => {
       ctx.clearRect(0, 0, c.width, c.height);
-      // Spawn the bills from the LEFT-opening flap's mouth.
+      const floor = c.height - 4 * dpr;
+      if (hoverRef.current) hoverFrames++; else hoverFrames = 0;
       const ox = c.width - 32 * dpr;
       const oy = 16 * dpr;
-      // Substantially slower, calmer spawn cadence.
-      if (frame > DELAY && Math.random() < 0.11) {
+      // Only spawn while hovered (and after the flap has had time to open).
+      if (hoverRef.current && hoverFrames > SPAWN_DELAY && Math.random() < 0.11) {
         notes.push({
           x: ox, y: oy,
           vx: (Math.random() - 0.5) * 0.45 * dpr,
@@ -603,18 +638,34 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
           r: Math.random() * Math.PI * 2,
           rs: (Math.random() - 0.5) * 1.1 * (Math.PI / 180),
           s: 8 + Math.random() * 4,
+          landed: false, alpha: 1,
         });
       }
       for (let i = notes.length - 1; i >= 0; i--) {
         const n = notes[i];
-        n.vy += 0.006 * dpr;
-        n.x += n.vx;
-        n.y += n.vy;
-        n.r += n.rs;
-        if (n.y > c.height + 20) { notes.splice(i, 1); continue; }
+        if (!n.landed) {
+          // When unhovered, gently boost gravity so bills settle naturally instead of hanging.
+          n.vy += (hoverRef.current ? 0.006 : 0.022) * dpr;
+          n.x += n.vx;
+          n.y += n.vy;
+          n.r += n.rs;
+          // Slow rotation as the bill nears the floor.
+          if (!hoverRef.current) n.rs *= 0.96;
+          if (n.y >= floor) {
+            n.y = floor;
+            n.vx = 0; n.vy = 0; n.rs = 0;
+            // Settle rotation toward flat-ish orientation
+            n.landed = true;
+          }
+        } else {
+          // Brief settle, then fade out.
+          n.alpha -= 0.025;
+          if (n.alpha <= 0) { notes.splice(i, 1); continue; }
+        }
         const w = n.s * 1.6 * dpr;
         const hgt = n.s * dpr;
         ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, n.alpha));
         ctx.translate(n.x, n.y);
         ctx.rotate(n.r);
         ctx.shadowColor = "rgba(62,207,142,0.35)";
@@ -627,7 +678,6 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
         ctx.fill();
         ctx.stroke();
         ctx.shadowBlur = 0;
-        // inner borders
         ctx.strokeStyle = "rgba(62,207,142,0.45)";
         ctx.beginPath();
         ctx.moveTo(-w / 2 + 2, -hgt / 2 + 2);
@@ -635,7 +685,6 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
         ctx.moveTo(-w / 2 + 2, hgt / 2 - 2);
         ctx.lineTo(w / 2 - 2, hgt / 2 - 2);
         ctx.stroke();
-        // ₹ symbol
         ctx.fillStyle = "#3ECF8E";
         ctx.font = `bold ${Math.round(n.s)}px Inter, sans-serif`;
         ctx.textAlign = "center";
@@ -650,10 +699,10 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
     const ro = new ResizeObserver(resize);
     ro.observe(c);
     return () => { cancelAnimationFrame(raf); ro.disconnect(); };
-  }, [h, reduce]);
+  }, [reduce]);
 
   return (
-    <StatShell label="Budget used" value={value} onClick={onClick} glow="#7C3AED" hovering={h} onEnter={onMouseEnter} onLeave={onMouseLeave}>
+    <StatShell label="Budget used" value={value} onClick={onClick} glow="#7C3AED" hovering={h} onEnter={() => setH(true)} onLeave={() => setH(false)}>
       <canvas
         ref={canvasRef}
         className="pointer-events-none"
@@ -678,18 +727,10 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
             background: "linear-gradient(145deg,#9333EA,#7C3AED)",
             borderRadius: 5,
             transformOrigin: "left center",
-            animation: !reduce && h ? "wOpenLeft 2.6s ease-in-out infinite" : undefined,
-            transform: !reduce && h ? undefined : "rotateY(0deg)",
+            transform: !reduce && h ? "rotateY(-150deg)" : "rotateY(0deg)",
+            transition: "transform .9s cubic-bezier(.4,.0,.2,1)",
           }}
         />
-        <style>{`
-          @keyframes wOpenLeft {
-            0%   { transform: rotateY(0deg); }
-            18%  { transform: rotateY(-150deg); }
-            78%  { transform: rotateY(-150deg); }
-            100% { transform: rotateY(0deg); }
-          }
-        `}</style>
       </div>
     </StatShell>
   );
