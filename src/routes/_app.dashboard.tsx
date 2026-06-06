@@ -290,21 +290,22 @@ export function StatusPill({ status }: { status: string }) {
 /* ============ Animated Stat Cards ============ */
 
 function StatShell({
-  label, value, onClick, glow, hovering, setHovering, children,
+  label, value, onClick, glow, hovering, onEnter, onLeave, children,
 }: {
   label: string; value: number | string; onClick: () => void; glow: string;
-  hovering: boolean; setHovering: (b: boolean) => void; children: ReactNode;
+  hovering: boolean; onEnter: () => void; onLeave: () => void; children: ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
       className="relative overflow-hidden rounded-xl border bg-card p-4 text-left transition-all hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       style={{
         borderColor: hovering ? glow : "var(--color-border)",
         boxShadow: hovering ? `0 0 20px ${glow}66` : undefined,
+        transition: "border-color .4s ease, box-shadow .4s ease, transform .2s ease",
         minHeight: 110,
       }}
     >
