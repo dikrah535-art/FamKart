@@ -11,6 +11,27 @@ import { requeueRecurringItems } from "@/lib/recurring";
 
 export const Route = createFileRoute("/_app/dashboard")({ component: Dashboard });
 
+/* Hover latch: stays "active" until the in-flight animation cycle completes,
+   so leaving the card never snaps an animation mid-flight. */
+function useHoverLatch(cycleMs: number) {
+  const [active, setActive] = useState(false);
+  const startRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onMouseEnter = () => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (!active) startRef.current = performance.now();
+    setActive(true);
+  };
+  const onMouseLeave = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    const elapsed = performance.now() - startRef.current;
+    const remaining = cycleMs - (elapsed % cycleMs);
+    timerRef.current = setTimeout(() => setActive(false), Math.max(120, remaining));
+  };
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  return { active, onMouseEnter, onMouseLeave };
+}
+
 type Item = {
   id: string; name: string; status: string; priority: string;
   category_id: string | null; assigned_to: string | null; created_at: string;
