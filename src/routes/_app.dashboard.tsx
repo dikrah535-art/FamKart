@@ -366,7 +366,7 @@ function NeededStat({ value, onClick, reduce }: { value: number; onClick: () => 
 }
 
 function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => void; reduce: boolean }) {
-  const [h, setH] = useState(false);
+  const { active: h, onMouseEnter, onMouseLeave } = useHoverLatch(1100);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const hoverRef = useRef(false);
   useEffect(() => { hoverRef.current = h; }, [h]);
@@ -441,7 +441,7 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
   }, [reduce]);
 
   return (
-    <StatShell label="Urgent" value={value} onClick={onClick} glow="#EF4444" hovering={h} setHovering={setH}>
+    <StatShell label="Urgent" value={value} onClick={onClick} glow="#EF4444" hovering={h} onEnter={onMouseEnter} onLeave={onMouseLeave}>
       <canvas
         ref={canvasRef}
         className="pointer-events-none"
