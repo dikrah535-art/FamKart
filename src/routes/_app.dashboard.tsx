@@ -11,8 +11,6 @@ import { requeueRecurringItems } from "@/lib/recurring";
 
 export const Route = createFileRoute("/_app/dashboard")({ component: Dashboard });
 
-/* Hover latch: stays "active" until the in-flight animation cycle completes,
-   so leaving the card never snaps an animation mid-flight. */
 function useHoverLatch(cycleMs: number) {
   const [active, setActive] = useState(false);
   const startRef = useRef(0);
@@ -48,6 +46,9 @@ function Dashboard() {
 
   const load = async () => {
     if (!family) return;
+    // Dynamic start of current month — never hardcoded
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const [it, ct, ph] = await Promise.all([
       supabase
         .from("items")
@@ -59,10 +60,7 @@ function Dashboard() {
         .from("purchase_history")
         .select("cost,purchased_at")
         .eq("family_id", family.id)
-        .gte(
-          "purchased_at",
-          "2026-06-01T00:00:00.000Z"
-        ),
+        .gte("purchased_at", monthStart),
     ]);
     setItems((it.data as Item[]) ?? []);
     setCats((ct.data as Cat[]) ?? []);
@@ -76,7 +74,6 @@ function Dashboard() {
 
   useEffect(() => { load(); }, [family]);
 
-  // Re-queue recurring items whose interval has elapsed
   useEffect(() => {
     if (!family) return;
     requeueRecurringItems(family.id).then(load);
@@ -86,30 +83,16 @@ function Dashboard() {
     if (!family) return;
     const ch = supabase
       .channel(`dash:${family.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "items", filter: `family_id=eq.${family.id}` },
-        () => load()
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "purchase_history", filter: `family_id=eq.${family.id}` },
-        () => load()
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "families", filter: `id=eq.${family.id}` },
-        () => load()
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "items", filter: `family_id=eq.${family.id}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "purchase_history", filter: `family_id=eq.${family.id}` }, () => load())
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "families", filter: `id=eq.${family.id}` }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [family]);
 
-  // Global Stat Counters
   const needed = items.filter((i) => i.status === "needed").length;
   const urgent = items.filter((i) => i.priority === "urgent" && i.status !== "bought" && i.status !== "stocked").length;
   const low = items.filter((i) => i.status === "low_stock").length;
-  
   const budgetUsed = family?.monthly_budget
     ? Math.round((purchasedTotal / Number(family.monthly_budget)) * 100)
     : 0;
@@ -118,8 +101,7 @@ function Dashboard() {
   const urgentItems = items
     .filter((i) => i.priority === "urgent" && i.status !== "bought" && i.status !== "stocked")
     .slice(0, 8);
-  
-  // Real-time feeds filtered to ignore anything bought or stocked
+
   const myItems = items
     .filter((i) => i.assigned_to === user?.id && i.status !== "bought" && i.status !== "stocked")
     .slice(0, 5);
@@ -172,18 +154,13 @@ function Dashboard() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
           {cats.map((c) => {
             const inCat = items.filter((i) => i.category_id === c.id);
-            
-            // STRICT DEFINITION: Active means it requires restocking right now
             const active = inCat.filter(
-              (i) => i.status === "needed" || i.status === "low_stock" || (i.priority === "urgent" && i.status !== "bought" && i.status !== "stocked")
+              (i) => i.status === "needed" || i.status === "low_stock" ||
+                (i.priority === "urgent" && i.status !== "bought" && i.status !== "stocked")
             );
             const activeCount = active.length;
             const hasActive = activeCount > 0;
-            
-            // Green bar reflects how much of this category still needs buying.
-            // 0 items OR every item already stocked/bought → fully empty (neutral).
             const pct = inCat.length ? Math.round((activeCount / inCat.length) * 100) : 0;
-            
             return (
               <motion.div
                 key={c.id}
@@ -277,11 +254,7 @@ export function StatusPill({ status }: { status: string }) {
     bought: "bg-primary/15 text-primary",
   };
   return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${
-        map[status] ?? "bg-accent"
-      }`}
-    >
+    <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${map[status] ?? "bg-accent"}`}>
       {status.replace("_", " ")}
     </span>
   );
@@ -322,44 +295,23 @@ function NeededStat({ value, onClick, reduce }: { value: number; onClick: () => 
   const { active: h, onMouseEnter, onMouseLeave } = useHoverLatch(1800);
   return (
     <StatShell label="Items needed" value={value} onClick={onClick} glow="#3ECF8E" hovering={h} onEnter={onMouseEnter} onLeave={onMouseLeave}>
-      <div
-        className="cardbox"
-        style={{ position: "absolute", top: 10, right: 10, width: 38, height: 38, perspective: 220 }}
-      >
-        <div
-          style={{
-            position: "absolute", bottom: 0, width: 38, height: 24,
-            background: "linear-gradient(150deg,#D97706,#92400E)",
-            borderRadius: "0 0 5px 5px",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute", bottom: 0, left: "50%", width: 2, height: 24,
-            background: "#92400E", transform: "translateX(-50%)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute", top: 0, left: 0, width: 19, height: 15,
-            background: "#F59E0B", borderRadius: "3px 0 0 0",
-            transformOrigin: "bottom left",
-            animation: !reduce && h ? "cbFL 1.8s ease-in-out infinite" : undefined,
-          }}
-        />
-        <div
-          style={{
-            position: "absolute", top: 0, right: 0, width: 19, height: 15,
-            background: "#F59E0B", borderRadius: "0 3px 0 0",
-            transformOrigin: "bottom right",
-            animation: !reduce && h ? "cbFR 1.8s ease-in-out infinite" : undefined,
-          }}
-        />
+      <div style={{ position: "absolute", top: 10, right: 10, width: 38, height: 38, perspective: 220 }}>
+        <div style={{ position: "absolute", bottom: 0, width: 38, height: 24, background: "linear-gradient(150deg,#D97706,#92400E)", borderRadius: "0 0 5px 5px" }} />
+        <div style={{ position: "absolute", bottom: 0, left: "50%", width: 2, height: 24, background: "#92400E", transform: "translateX(-50%)" }} />
+        <div style={{
+          position: "absolute", top: 0, left: 0, width: 19, height: 15,
+          background: "#F59E0B", borderRadius: "3px 0 0 0", transformOrigin: "bottom left",
+          animation: !reduce && h ? "cbFL 1.8s ease-in-out infinite" : undefined,
+        }} />
+        <div style={{
+          position: "absolute", top: 0, right: 0, width: 19, height: 15,
+          background: "#F59E0B", borderRadius: "0 3px 0 0", transformOrigin: "bottom right",
+          animation: !reduce && h ? "cbFR 1.8s ease-in-out infinite" : undefined,
+        }} />
       </div>
       <style>{`
         @keyframes cbFL { 0%,100%{transform:rotateY(0)} 22%{transform:rotateY(-125deg)} 62%{transform:rotateY(-125deg)} 82%{transform:rotateY(0)} }
         @keyframes cbFR { 0%,100%{transform:rotateY(0)} 22%{transform:rotateY(125deg)} 62%{transform:rotateY(125deg)} 82%{transform:rotateY(0)} }
-        @keyframes wLeft { 0%{transform:rotateY(0deg)} 100%{transform:rotateY(-140deg)} }
       `}</style>
     </StatShell>
   );
@@ -401,7 +353,6 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
         Math.hypot(tx, hh - ty),
         Math.hypot(w - tx, hh - ty),
       );
-      // Only spawn new rings while hovering — but always finish what we started.
       if (hoverRef.current && frame % 65 === 0) {
         rings.push({ r: 4 * dpr, maxR, spd: maxR / 95 });
       }
@@ -431,8 +382,6 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
       running = true;
       raf = requestAnimationFrame(loop);
     };
-    // Kick the loop whenever hover flips true; the loop self-stops once
-    // rings have drained and hover is false, so existing sweeps always finish.
     const interval = setInterval(() => { if (hoverRef.current) start(); }, 80);
     if (h) start();
     const ro = new ResizeObserver(resize);
@@ -454,9 +403,7 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
           filter: h ? "drop-shadow(0 0 10px #EF4444)" : "none",
           transition: "filter 0.2s",
         }}
-      >
-        ⚠️
-      </span>
+      >⚠️</span>
     </StatShell>
   );
 }
@@ -480,18 +427,17 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
     resize();
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    // Jagged descending trend — always visible. The "sp" highlight only animates on hover.
     const pts: [number, number][] = [
       [0.00, 0.12], [0.10, 0.34], [0.20, 0.20],
       [0.32, 0.46], [0.42, 0.30], [0.54, 0.58],
       [0.66, 0.42], [0.78, 0.70], [0.88, 0.56],
       [1.00, 0.90],
     ];
-    // sweeping highlight position 0..1; sweeping flag = currently in an in-flight cycle
     let sp = 0;
     let sweeping = false;
     let raf = 0;
-    const STEP = 0.0032; // slow, premium pace (~5s per full cycle at 60fps)
+    const STEP = 0.0032;
+
     const drawStaticLine = (w: number, hh: number, abs: [number, number][]) => {
       ctx.strokeStyle = "#F59E0B";
       ctx.lineWidth = 3.2 * dpr;
@@ -501,7 +447,6 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
       ctx.moveTo(abs[0][0], abs[0][1]);
       for (let i = 1; i < abs.length; i++) ctx.lineTo(abs[i][0], abs[i][1]);
       ctx.stroke();
-      // Stationary arrowhead at the end
       const last = abs[abs.length - 1];
       const prev = abs[abs.length - 2];
       const angle = Math.atan2(last[1] - prev[1], last[0] - prev[0]);
@@ -518,11 +463,11 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
       ctx.fill();
       ctx.restore();
     };
+
     const draw = () => {
       const w = c.width;
       const hh = c.height;
       ctx.clearRect(0, 0, w, hh);
-      // grid
       ctx.strokeStyle = "rgba(245,158,11,0.10)";
       ctx.lineWidth = 0.5 * dpr;
       for (let i = 1; i < 4; i++) {
@@ -530,14 +475,11 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       }
       const abs = pts.map(([x, y]) => [x * w, y * hh] as [number, number]);
-      // Begin a sweep only when hovered; complete-in-flight sweeps always finish.
       if (hoverRef.current && !sweeping) { sweeping = true; sp = 0; }
-      // Always render the static line first as the resting state.
       drawStaticLine(w, hh, abs);
       if (sweeping) {
         const total = abs.length - 1;
         const upto = total * Math.min(1, sp);
-        // Highlighted glowing overlay segment
         ctx.save();
         ctx.shadowColor = "rgba(245,158,11,0.85)";
         ctx.shadowBlur = 14;
@@ -564,7 +506,6 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
           }
         }
         ctx.stroke();
-        // moving tip halo
         ctx.fillStyle = "rgba(252,211,77,0.55)";
         ctx.beginPath();
         ctx.arc(tipX, tipY, 6 * dpr, 0, Math.PI * 2);
@@ -572,7 +513,6 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
         ctx.restore();
         sp += STEP;
         if (sp >= 1) {
-          // Finished iteration: if still hovered, start another cycle; else, settle to static.
           if (hoverRef.current) { sp = 0; } else { sweeping = false; sp = 0; }
         }
       }
@@ -620,23 +560,24 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
     };
     const notes: Note[] = [];
     let raf = 0;
-    let frame = 0;
     let hoverFrames = 0;
-    const SPAWN_DELAY = Math.ceil((900 / 1000) * 60);
+    // Spawn after ~700ms so wallet has time to open first
+    const SPAWN_DELAY = Math.ceil((700 / 1000) * 60);
     const loop = () => {
       ctx.clearRect(0, 0, c.width, c.height);
       const floor = c.height - 4 * dpr;
       if (hoverRef.current) hoverFrames++; else hoverFrames = 0;
       const ox = c.width - 32 * dpr;
       const oy = 16 * dpr;
-      // Only spawn while hovered (and after the flap has had time to open).
-      if (hoverRef.current && hoverFrames > SPAWN_DELAY && Math.random() < 0.11) {
+      // Slightly higher spawn rate for better visual density
+      if (hoverRef.current && hoverFrames > SPAWN_DELAY && Math.random() < 0.16) {
         notes.push({
-          x: ox, y: oy,
-          vx: (Math.random() - 0.5) * 0.45 * dpr,
-          vy: (0.25 + Math.random() * 0.45) * dpr,
+          x: ox + (Math.random() - 0.5) * 10 * dpr,
+          y: oy,
+          vx: (Math.random() - 0.5) * 0.55 * dpr,
+          vy: (0.3 + Math.random() * 0.5) * dpr,
           r: Math.random() * Math.PI * 2,
-          rs: (Math.random() - 0.5) * 1.1 * (Math.PI / 180),
+          rs: (Math.random() - 0.5) * 1.2 * (Math.PI / 180),
           s: 8 + Math.random() * 4,
           landed: false, alpha: 1,
         });
@@ -644,21 +585,17 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
       for (let i = notes.length - 1; i >= 0; i--) {
         const n = notes[i];
         if (!n.landed) {
-          // When unhovered, gently boost gravity so bills settle naturally instead of hanging.
           n.vy += (hoverRef.current ? 0.006 : 0.022) * dpr;
           n.x += n.vx;
           n.y += n.vy;
           n.r += n.rs;
-          // Slow rotation as the bill nears the floor.
           if (!hoverRef.current) n.rs *= 0.96;
           if (n.y >= floor) {
             n.y = floor;
             n.vx = 0; n.vy = 0; n.rs = 0;
-            // Settle rotation toward flat-ish orientation
             n.landed = true;
           }
         } else {
-          // Brief settle, then fade out.
           n.alpha -= 0.025;
           if (n.alpha <= 0) { notes.splice(i, 1); continue; }
         }
@@ -692,7 +629,6 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
         ctx.fillText("₹", 0, 0);
         ctx.restore();
       }
-      frame++;
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -708,29 +644,23 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
         className="pointer-events-none"
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
       />
-      <div
-        style={{
-          position: "absolute", top: 9, right: 9,
-          width: 36, height: 28, perspective: 400, zIndex: 3,
-        }}
-      >
-        <div
-          style={{
-            position: "absolute", inset: 0,
-            background: "linear-gradient(145deg,#7C3AED,#5B21B6)",
-            borderRadius: 5,
-          }}
-        />
-        <div
-          style={{
-            position: "absolute", inset: 0,
-            background: "linear-gradient(145deg,#9333EA,#7C3AED)",
-            borderRadius: 5,
-            transformOrigin: "left center",
-            transform: !reduce && h ? "rotateY(-150deg)" : "rotateY(0deg)",
-            transition: "transform .9s cubic-bezier(.4,.0,.2,1)",
-          }}
-        />
+      {/* Wallet — door hinges on RIGHT, swings open to the LEFT */}
+      <div style={{ position: "absolute", top: 9, right: 9, width: 36, height: 28, perspective: 400, zIndex: 3 }}>
+        {/* Static wallet body */}
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "linear-gradient(145deg,#7C3AED,#5B21B6)",
+          borderRadius: 5,
+        }} />
+        {/* Animated door — hinge on right so it opens left */}
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "linear-gradient(145deg,#9333EA,#7C3AED)",
+          borderRadius: 5,
+          transformOrigin: "right center",
+          transform: !reduce && h ? "rotateY(150deg)" : "rotateY(0deg)",
+          transition: "transform .9s cubic-bezier(.4,.0,.2,1)",
+        }} />
       </div>
     </StatShell>
   );
