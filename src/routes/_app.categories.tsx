@@ -54,7 +54,6 @@ function CategoriesPage() {
     (items ?? []).forEach((i: { category_id: string | null }) => { if (i.category_id) map[i.category_id] = (map[i.category_id] || 0) + 1; });
     setCounts(map);
 
-    // Active = not stocked AND (needed | low_stock | urgent priority) — for green border indicator
     const { data: allItems } = await supabase
       .from("items")
       .select("category_id,status,priority")
@@ -167,7 +166,7 @@ function CategoriesPage() {
                       : "var(--color-accent)",
                     color: (activeCounts[c.id] ?? 0) > 0 ? "#3ECF8E" : undefined,
                   }}
-                >{counts[c.id] ?? 0} items</motion.span>
+                >{activeCounts[c.id] ?? 0} items</motion.span>
               </div>
               <p className="mt-3 font-semibold">{c.name}</p>
               <div
