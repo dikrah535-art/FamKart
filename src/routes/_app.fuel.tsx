@@ -46,23 +46,33 @@ function FuelPage() {
 
   const price = fuelRates[fuelType];
 
-  // Core rate fetching function
+  // Core rate fetching function with safe case-insensitive checking
   const fetchStateRates = async (targetState: string) => {
     setRatesLoading(true);
+    console.log(`[Fuel Sync] Fetching rates for state: "${targetState}"`);
+    
+    // Using ilike to prevent problems if database names are in ALL CAPS or lowercase
     const { data, error } = await supabase
       .from("daily_fuel_rates")
-      .select("petrol_rate, diesel_rate, cng_rate")
-      .eq("state_name", targetState)
+      .select("state_name, petrol_rate, diesel_rate, cng_rate")
+      .ilike("state_name", targetState)
       .maybeSingle();
 
-    if (data && !error) {
+    if (error) {
+      console.error("[Fuel Sync] Supabase error fetching rates:", error);
+    }
+
+    if (data) {
+      console.log("[Fuel Sync] Successfully found rates in database:", data);
       setFuelRates({
-        Petrol: Number(data.petrol_rate),
-        Diesel: Number(data.diesel_rate),
-        CNG: Number(data.cng_rate)
+        Petrol: Number(data.petrol_rate) || 100,
+        Diesel: Number(data.diesel_rate) || 90,
+        CNG: Number(data.cng_rate) || 85
       });
     } else {
-      setFuelRates({ Petrol: 100, Diesel: 90, CNG: 85 });
+      console.warn(`[Fuel Sync] No rates found matching "${targetState}". Is the table empty? Using defaults.`);
+      // Default fallbacks so the app doesn't show 0
+      setFuelRates({ Petrol: 101.25, Diesel: 93.40, CNG: 82.10 });
     }
     setRatesLoading(false);
   };
@@ -89,11 +99,14 @@ function FuelPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "daily_fuel_rates" },
-        () => {
+        (payload) => {
+          console.log("[Fuel Sync] Realtime update received from DB!", payload);
           fetchStateRates(stateName);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[Fuel Sync] Realtime connection status: ${status}`);
+      });
 
     return () => {
       supabase.removeChannel(channel);
