@@ -11,25 +11,6 @@ import { requeueRecurringItems } from "@/lib/recurring";
 
 export const Route = createFileRoute("/_app/dashboard")({ component: Dashboard });
 
-function useHoverLatch(cycleMs: number) {
-  const [active, setActive] = useState(false);
-  const startRef = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const onMouseEnter = () => {
-    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-    if (!active) startRef.current = performance.now();
-    setActive(true);
-  };
-  const onMouseLeave = () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    const elapsed = performance.now() - startRef.current;
-    const remaining = cycleMs - (elapsed % cycleMs);
-    timerRef.current = setTimeout(() => setActive(false), Math.max(120, remaining));
-  };
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
-  return { active, onMouseEnter, onMouseLeave };
-}
-
 type Item = {
   id: string; name: string; status: string; priority: string;
   category_id: string | null; assigned_to: string | null; created_at: string;
@@ -291,9 +272,9 @@ function StatShell({
 }
 
 function NeededStat({ value, onClick, reduce }: { value: number; onClick: () => void; reduce: boolean }) {
-  const { active: h, onMouseEnter, onMouseLeave } = useHoverLatch(1800);
+  const [h, setH] = useState(false);
   return (
-    <StatShell label="Items needed" value={value} onClick={onClick} glow="#3ECF8E" hovering={h} onEnter={onMouseEnter} onLeave={onMouseLeave}>
+    <StatShell label="Items needed" value={value} onClick={onClick} glow="#3ECF8E" hovering={h} onEnter={() => setH(true)} onLeave={() => setH(false)}>
       <div style={{ position: "absolute", top: 10, right: 10, width: 38, height: 38, perspective: 220 }}>
         <div style={{ position: "absolute", bottom: 0, width: 38, height: 24, background: "linear-gradient(150deg,#D97706,#92400E)", borderRadius: "0 0 5px 5px" }} />
         <div style={{ position: "absolute", bottom: 0, left: "50%", width: 2, height: 24, background: "#92400E", transform: "translateX(-50%)" }} />
@@ -317,7 +298,7 @@ function NeededStat({ value, onClick, reduce }: { value: number; onClick: () => 
 }
 
 function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => void; reduce: boolean }) {
-  const { active: h, onMouseEnter, onMouseLeave } = useHoverLatch(1100);
+  const [h, setH] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const hoverRef = useRef(false);
   useEffect(() => { hoverRef.current = h; }, [h]);
@@ -378,7 +359,7 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
   }, [reduce]);
 
   return (
-    <StatShell label="Urgent" value={value} onClick={onClick} glow="#EF4444" hovering={h} onEnter={onMouseEnter} onLeave={onMouseLeave}>
+    <StatShell label="Urgent" value={value} onClick={onClick} glow="#EF4444" hovering={h} onEnter={() => setH(true)} onLeave={() => setH(false)}>
       <canvas
         ref={canvasRef}
         className="pointer-events-none"
@@ -424,7 +405,6 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
     let sp = 0;
     let sweeping = true;
     let raf = 0;
-    // Lowered velocity step for an ultra-smooth, premium pacing sequence
     const STEP = 0.0018;
 
     const drawStaticLine = (w: number, hh: number, abs: [number, number][], progress: number) => {
@@ -566,7 +546,6 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
       const ox = c.width - 32 * dpr;
       const oy = 16 * dpr;
       
-      // Much slower emission particle rate for premium presentation mechanics
       if (hoverRef.current && hoverFrames > SPAWN_DELAY && Math.random() < 0.07) {
         notes.push({
           x: ox + (Math.random() - 0.5) * 10 * dpr,
@@ -582,7 +561,6 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
       for (let i = notes.length - 1; i >= 0; i--) {
         const n = notes[i];
         if (!n.landed) {
-          // Accelerate downwards straight to floor on unhover cycle
           n.vy += (hoverRef.current ? 0.003 : 0.038) * dpr;
           n.x += n.vx;
           n.y += n.vy;
