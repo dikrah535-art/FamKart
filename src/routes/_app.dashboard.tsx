@@ -46,7 +46,6 @@ function Dashboard() {
 
   const load = async () => {
     if (!family) return;
-    // Dynamic start of current month — never hardcoded
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const [it, ct, ph] = await Promise.all([
@@ -274,7 +273,7 @@ function StatShell({
       onClick={onClick}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
-      className="relative overflow-hidden rounded-xl border bg-card p-4 text-left transition-all hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="relative overflow-hidden rounded-xl border bg-card p-4 text-left transition-all hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary w-full"
       style={{
         borderColor: hovering ? glow : "var(--color-border)",
         boxShadow: hovering ? `0 0 20px ${glow}66` : undefined,
@@ -283,7 +282,7 @@ function StatShell({
       }}
     >
       {children}
-      <div className="relative">
+      <div className="relative z-10">
         <span className="text-xs text-muted-foreground">{label}</span>
         <p className="mt-2 text-2xl font-bold">{value}</p>
       </div>
@@ -337,10 +336,9 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
     const ctx = c.getContext("2d");
     if (!ctx) return;
     type Ring = { r: number; maxR: number; spd: number };
-    const rings: Ring[] = [];
+    let rings: Ring[] = [];
     let raf = 0;
     let frame = 0;
-    let running = false;
     const loop = () => {
       ctx.clearRect(0, 0, c.width, c.height);
       const w = c.width;
@@ -371,22 +369,12 @@ function UrgentStat({ value, onClick, reduce }: { value: number; onClick: () => 
         ctx.fill();
       }
       frame++;
-      if (hoverRef.current || rings.length > 0) {
-        raf = requestAnimationFrame(loop);
-      } else {
-        running = false;
-      }
-    };
-    const start = () => {
-      if (running) return;
-      running = true;
       raf = requestAnimationFrame(loop);
     };
-    const interval = setInterval(() => { if (hoverRef.current) start(); }, 80);
-    if (h) start();
+    raf = requestAnimationFrame(loop);
     const ro = new ResizeObserver(resize);
     ro.observe(c);
-    return () => { cancelAnimationFrame(raf); clearInterval(interval); ro.disconnect(); };
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
   }, [reduce]);
 
   return (
@@ -434,11 +422,12 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
       [1.00, 0.90],
     ];
     let sp = 0;
-    let sweeping = false;
+    let sweeping = true;
     let raf = 0;
-    const STEP = 0.0032;
+    // Lowered velocity step for an ultra-smooth, premium pacing sequence
+    const STEP = 0.0018;
 
-    const drawStaticLine = (w: number, hh: number, abs: [number, number][]) => {
+    const drawStaticLine = (w: number, hh: number, abs: [number, number][], progress: number) => {
       ctx.strokeStyle = "#F59E0B";
       ctx.lineWidth = 3.2 * dpr;
       ctx.lineJoin = "round";
@@ -447,6 +436,7 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
       ctx.moveTo(abs[0][0], abs[0][1]);
       for (let i = 1; i < abs.length; i++) ctx.lineTo(abs[i][0], abs[i][1]);
       ctx.stroke();
+
       const last = abs[abs.length - 1];
       const prev = abs[abs.length - 2];
       const angle = Math.atan2(last[1] - prev[1], last[0] - prev[0]);
@@ -475,11 +465,12 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       }
       const abs = pts.map(([x, y]) => [x * w, y * hh] as [number, number]);
-      if (hoverRef.current && !sweeping) { sweeping = true; sp = 0; }
-      drawStaticLine(w, hh, abs);
+      
+      drawStaticLine(w, hh, abs, sp);
+      
       if (sweeping) {
         const total = abs.length - 1;
-        const upto = total * Math.min(1, sp);
+        const upto = total * sp;
         ctx.save();
         ctx.shadowColor = "rgba(245,158,11,0.85)";
         ctx.shadowBlur = 14;
@@ -511,9 +502,15 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
         ctx.arc(tipX, tipY, 6 * dpr, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
-        sp += STEP;
-        if (sp >= 1) {
-          if (hoverRef.current) { sp = 0; } else { sweeping = false; sp = 0; }
+        
+        if (hoverRef.current) {
+          sp += STEP;
+          if (sp >= 1) sp = 0;
+        } else {
+          if (sp > 0) {
+            sp += STEP * 1.5;
+            if (sp >= 1) sp = 0;
+          }
         }
       }
       raf = requestAnimationFrame(draw);
@@ -529,7 +526,7 @@ function LowStockStat({ value, onClick, reduce }: { value: number; onClick: () =
       <canvas
         ref={canvasRef}
         className="pointer-events-none absolute"
-        style={{ right: 8, top: "50%", transform: "translateY(-50%)", width: 130, height: 70, opacity: h ? 1 : 0.9, transition: "opacity .5s ease" }}
+        style={{ right: 8, top: "45%", transform: "translateY(-50%)", width: 130, height: 70, opacity: 1 }}
       />
     </StatShell>
   );
@@ -558,26 +555,26 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
       x: number; y: number; vx: number; vy: number; r: number; rs: number; s: number;
       landed: boolean; alpha: number;
     };
-    const notes: Note[] = [];
+    let notes: Note[] = [];
     let raf = 0;
     let hoverFrames = 0;
-    // Spawn after ~700ms so wallet has time to open first
-    const SPAWN_DELAY = Math.ceil((700 / 1000) * 60);
+    const SPAWN_DELAY = Math.ceil((450 / 1000) * 60);
     const loop = () => {
       ctx.clearRect(0, 0, c.width, c.height);
       const floor = c.height - 4 * dpr;
       if (hoverRef.current) hoverFrames++; else hoverFrames = 0;
       const ox = c.width - 32 * dpr;
       const oy = 16 * dpr;
-      // Slightly higher spawn rate for better visual density
-      if (hoverRef.current && hoverFrames > SPAWN_DELAY && Math.random() < 0.16) {
+      
+      // Much slower emission particle rate for premium presentation mechanics
+      if (hoverRef.current && hoverFrames > SPAWN_DELAY && Math.random() < 0.07) {
         notes.push({
           x: ox + (Math.random() - 0.5) * 10 * dpr,
           y: oy,
-          vx: (Math.random() - 0.5) * 0.55 * dpr,
-          vy: (0.3 + Math.random() * 0.5) * dpr,
+          vx: (Math.random() - 0.5) * 0.4 * dpr,
+          vy: (0.15 + Math.random() * 0.35) * dpr,
           r: Math.random() * Math.PI * 2,
-          rs: (Math.random() - 0.5) * 1.2 * (Math.PI / 180),
+          rs: (Math.random() - 0.5) * 0.8 * (Math.PI / 180),
           s: 8 + Math.random() * 4,
           landed: false, alpha: 1,
         });
@@ -585,18 +582,19 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
       for (let i = notes.length - 1; i >= 0; i--) {
         const n = notes[i];
         if (!n.landed) {
-          n.vy += (hoverRef.current ? 0.006 : 0.022) * dpr;
+          // Accelerate downwards straight to floor on unhover cycle
+          n.vy += (hoverRef.current ? 0.003 : 0.038) * dpr;
           n.x += n.vx;
           n.y += n.vy;
           n.r += n.rs;
-          if (!hoverRef.current) n.rs *= 0.96;
+          if (!hoverRef.current) n.rs *= 0.94;
           if (n.y >= floor) {
             n.y = floor;
             n.vx = 0; n.vy = 0; n.rs = 0;
             n.landed = true;
           }
         } else {
-          n.alpha -= 0.025;
+          n.alpha -= 0.018;
           if (n.alpha <= 0) { notes.splice(i, 1); continue; }
         }
         const w = n.s * 1.6 * dpr;
@@ -644,22 +642,19 @@ function BudgetStat({ value, onClick, reduce }: { value: string; onClick: () => 
         className="pointer-events-none"
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
       />
-      {/* Wallet — door hinges on RIGHT, swings open to the LEFT */}
       <div style={{ position: "absolute", top: 9, right: 9, width: 36, height: 28, perspective: 400, zIndex: 3 }}>
-        {/* Static wallet body */}
         <div style={{
           position: "absolute", inset: 0,
           background: "linear-gradient(145deg,#7C3AED,#5B21B6)",
           borderRadius: 5,
         }} />
-        {/* Animated door — hinge on right so it opens left */}
         <div style={{
           position: "absolute", inset: 0,
           background: "linear-gradient(145deg,#9333EA,#7C3AED)",
           borderRadius: 5,
-          transformOrigin: "right center",
-          transform: !reduce && h ? "rotateY(150deg)" : "rotateY(0deg)",
-          transition: "transform .9s cubic-bezier(.4,.0,.2,1)",
+          transformOrigin: "left center",
+          transform: !reduce && h ? "rotateY(-145deg)" : "rotateY(0deg)",
+          transition: "transform .8s cubic-bezier(.4,.0,.2,1)",
         }} />
       </div>
     </StatShell>
