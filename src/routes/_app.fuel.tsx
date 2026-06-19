@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Fuel, Bus, Wrench, Car, MapPin, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,19 +37,23 @@ function FuelPage() {
   const [budget, setBudget] = useState(0);
   const [spent, setSpent] = useState(0);
 
-  // Core reactive fuel states
+  // Core state management
   const [stateName, setStateName] = useState<string>("Rajasthan");
   const [fuelRates, setFuelRates] = useState<Record<FuelType, number>>({ Petrol: 112.70, Diesel: 98.39, CNG: 96.00 });
   const [ratesLoading, setRatesLoading] = useState(true);
   const [updatingProfile, setUpdatingProfile] = useState(false);
 
+  // Keep a reference to the active state name so real-time callbacks always look at the current value
+  const stateRef = useRef(stateName);
+  useEffect(() => {
+    stateRef.current = stateName;
+  }, [stateName]);
+
   const price = fuelRates[fuelType];
 
-  // Fetches accurate database variables dynamically
+  // Isolated rates query handler
   const fetchStateRates = async (targetState: string) => {
     setRatesLoading(true);
-    console.log(`[Fuel Sync] Querying DB for state: "${targetState}"`);
-    
     const { data, error } = await supabase
       .from("daily_fuel_rates")
       .select("state_name, petrol_rate, diesel_rate, cng_rate")
@@ -57,23 +61,29 @@ function FuelPage() {
       .maybeSingle();
 
     if (error) {
-      console.error("[Fuel Sync] Supabase query error:", error);
+      console.error("[Fuel Sync] Error querying database rows:", error);
     }
 
     if (data) {
-      console.log("[Fuel Sync] Database record matched:", data);
       setFuelRates({
         Petrol: Number(data.petrol_rate),
         Diesel: Number(data.diesel_rate),
         CNG: Number(data.cng_rate)
       });
     } else {
-      console.warn(`[Fuel Sync] Warning: "${targetState}" missing from table rows.`);
+      // Safety defaults specific to Rajasthan if nothing is loaded yet
+      if (targetState.toLowerCase() === "rajasthan") {
+        setFuelRates({ Petrol: 112.70, Diesel: 98.39, CNG: 96.00 });
+      } else if (targetState.toLowerCase() === "delhi") {
+        setFuelRates({ Petrol: 102.12, Diesel: 95.20, CNG: 83.09 });
+      } else {
+        setFuelRates({ Petrol: 104.50, Diesel: 94.20, CNG: 86.00 });
+      }
     }
     setRatesLoading(false);
   };
 
-  // Sync state view and set live web channel pipeline
+  // Initial user location preference setup
   useEffect(() => {
     async function initLocation() {
       if (!user?.id) return;
@@ -88,15 +98,18 @@ function FuelPage() {
       fetchStateRates(activeState);
     }
     initLocation();
+  }, [user]);
 
+  // Persistent background subscription for data updates
+  useEffect(() => {
     const channel = supabase
       .channel("live_fuel_changes")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "daily_fuel_rates" },
         () => {
-          // Triggers instant background redraw when values shift
-          fetchStateRates(stateName);
+          // Pull fresh data based on the current state value in the reference hook
+          fetchStateRates(stateRef.current);
         }
       )
       .subscribe();
@@ -104,14 +117,19 @@ function FuelPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, stateName]);
+  }, []);
 
-  // Dropdown persistence update handler
+  // Dropdown manual adjustment logic
   const handleStateChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const nextState = e.target.value;
+    
+    // 1. Force the UI to reflect the user's choice immediately
     setStateName(nextState);
+    
+    // 2. Query the exact row from the database right away
     await fetchStateRates(nextState);
 
+    // 3. Persist selection to the user profile
     if (user?.id) {
       setUpdatingProfile(true);
       await supabase
@@ -122,7 +140,7 @@ function FuelPage() {
     }
   };
 
-  // bi-directional calculator sync
+  // Calculator bi-directional calculations
   useEffect(() => {
     if (lastEdit !== "L") return;
     const l = parseFloat(litres);
