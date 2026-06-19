@@ -38,23 +38,22 @@ function FuelPage() {
   const [budget, setBudget] = useState(0);
   const [spent, setSpent] = useState(0);
 
-  // New states for tracking preference & dynamic prices
+  // States for dynamic prices and real-time state preferences
   const [stateName, setStateName] = useState<string>("Rajasthan");
   const [fuelRates, setFuelRates] = useState<Record<FuelType, number>>({ Petrol: 100, Diesel: 90, CNG: 85 });
   const [ratesLoading, setRatesLoading] = useState(true);
   const [updatingProfile, setUpdatingProfile] = useState(false);
 
-  // Derive target configuration prices reactively
   const price = fuelRates[fuelType];
 
-  // Fetch current prices from the database for the selected state
+  // Core rate fetching function
   const fetchStateRates = async (targetState: string) => {
     setRatesLoading(true);
     const { data, error } = await supabase
       .from("daily_fuel_rates")
       .select("petrol_rate, diesel_rate, cng_rate")
       .eq("state_name", targetState)
-      .single();
+      .maybeSingle();
 
     if (data && !error) {
       setFuelRates({
@@ -63,13 +62,12 @@ function FuelPage() {
         CNG: Number(data.cng_rate)
       });
     } else {
-      // Standard static fallback variables if table synchronization isn't fully written yet
       setFuelRates({ Petrol: 100, Diesel: 90, CNG: 85 });
     }
     setRatesLoading(false);
   };
 
-  // Sync state selection from user profile metadata on initial mount
+  // Setup Initial Profile Preference & Listen for Live Changes
   useEffect(() => {
     async function initLocation() {
       if (!user?.id) return;
@@ -79,21 +77,34 @@ function FuelPage() {
         .eq("id", user.id)
         .single();
 
-      if (data?.preferred_state) {
-        setStateName(data.preferred_state);
-        fetchStateRates(data.preferred_state);
-      } else {
-        fetchStateRates("Rajasthan");
-      }
+      const activeState = data?.preferred_state || "Rajasthan";
+      setStateName(activeState);
+      fetchStateRates(activeState);
     }
     initLocation();
-  }, [user]);
 
-  // Handle dropdown state selection changes persistently
+    // Realtime subscription setup
+    const channel = supabase
+      .channel("live_fuel_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "daily_fuel_rates" },
+        () => {
+          fetchStateRates(stateName);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, stateName]);
+
+  // Dropdown persistence update handler
   const handleStateChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const nextState = e.target.value;
     setStateName(nextState);
-    fetchStateRates(nextState);
+    await fetchStateRates(nextState);
 
     if (user?.id) {
       setUpdatingProfile(true);
@@ -105,7 +116,7 @@ function FuelPage() {
     }
   };
 
-  // bi-directional sync
+  // bi-directional calculator sync
   useEffect(() => {
     if (lastEdit !== "L") return;
     const l = parseFloat(litres);
@@ -182,7 +193,6 @@ function FuelPage() {
           <h1 className="text-3xl font-bold">Fuel & Transport</h1>
           <p className="text-sm text-muted-foreground">Track refills, fares and maintenance — auto-deducted from your monthly budget.</p>
           
-          {/* Subtle location line picker aligned with layout parameters */}
           <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
             <MapPin className="h-3.5 w-3.5 text-primary" />
             <span>Tracking Rates for: </span>
