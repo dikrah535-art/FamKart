@@ -37,21 +37,21 @@ function FuelPage() {
   const [budget, setBudget] = useState(0);
   const [spent, setSpent] = useState(0);
 
-  // Core state management
+  // Core rate states
   const [stateName, setStateName] = useState<string>("Rajasthan");
-  const [fuelRates, setFuelRates] = useState<Record<FuelType, number>>({ Petrol: 112.70, Diesel: 98.39, CNG: 96.00 });
+  const [fuelRates, setFuelRates] = useState<Record<FuelType, number>>({ Petrol: 0, Diesel: 0, CNG: 0 });
   const [ratesLoading, setRatesLoading] = useState(true);
   const [updatingProfile, setUpdatingProfile] = useState(false);
 
-  // Keep a reference to the active state name so real-time callbacks always look at the current value
+  // Keep reference for realtime data mapping
   const stateRef = useRef(stateName);
   useEffect(() => {
     stateRef.current = stateName;
   }, [stateName]);
 
-  const price = fuelRates[fuelType];
+  const price = fuelRates[fuelType] || 1;
 
-  // Isolated rates query handler
+  // Real database fetch action
   const fetchStateRates = async (targetState: string) => {
     setRatesLoading(true);
     const { data, error } = await supabase
@@ -61,7 +61,7 @@ function FuelPage() {
       .maybeSingle();
 
     if (error) {
-      console.error("[Fuel Sync] Error querying database rows:", error);
+      console.error("[Fuel Sync] Error querying state rate rows:", error);
     }
 
     if (data) {
@@ -71,19 +71,13 @@ function FuelPage() {
         CNG: Number(data.cng_rate)
       });
     } else {
-      // Safety defaults specific to Rajasthan if nothing is loaded yet
-      if (targetState.toLowerCase() === "rajasthan") {
-        setFuelRates({ Petrol: 112.70, Diesel: 98.39, CNG: 96.00 });
-      } else if (targetState.toLowerCase() === "delhi") {
-        setFuelRates({ Petrol: 102.12, Diesel: 95.20, CNG: 83.09 });
-      } else {
-        setFuelRates({ Petrol: 104.50, Diesel: 94.20, CNG: 86.00 });
-      }
+      // Emergency dynamic fallback only if network goes completely offline
+      setFuelRates({ Petrol: 100.00, Diesel: 90.00, CNG: 80.00 });
     }
     setRatesLoading(false);
   };
 
-  // Initial user location preference setup
+  // Setup Initial Profile Preference & Real-time Channel Subscriptions
   useEffect(() => {
     async function initLocation() {
       if (!user?.id) return;
@@ -100,7 +94,7 @@ function FuelPage() {
     initLocation();
   }, [user]);
 
-  // Persistent background subscription for data updates
+  // Persistent live data channel pipeline hook
   useEffect(() => {
     const channel = supabase
       .channel("live_fuel_changes")
@@ -108,7 +102,6 @@ function FuelPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "daily_fuel_rates" },
         () => {
-          // Pull fresh data based on the current state value in the reference hook
           fetchStateRates(stateRef.current);
         }
       )
@@ -119,17 +112,12 @@ function FuelPage() {
     };
   }, []);
 
-  // Dropdown manual adjustment logic
+  // Dropdown persistence update handler
   const handleStateChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const nextState = e.target.value;
-    
-    // 1. Force the UI to reflect the user's choice immediately
     setStateName(nextState);
-    
-    // 2. Query the exact row from the database right away
     await fetchStateRates(nextState);
 
-    // 3. Persist selection to the user profile
     if (user?.id) {
       setUpdatingProfile(true);
       await supabase
@@ -140,7 +128,7 @@ function FuelPage() {
     }
   };
 
-  // Calculator bi-directional calculations
+  // bi-directional calculator sync
   useEffect(() => {
     if (lastEdit !== "L") return;
     const l = parseFloat(litres);
@@ -261,7 +249,7 @@ function FuelPage() {
               >
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">{k}</p>
                 <p className="mt-1 text-2xl font-bold">
-                  ₹{fuelRates[k].toFixed(2)}
+                  ₹{fuelRates[k] ? fuelRates[k].toFixed(2) : "..."}
                   <span className="text-sm font-normal text-muted-foreground">/{k === "CNG" ? "Kg" : "L"}</span>
                 </p>
               </motion.button>
@@ -295,7 +283,7 @@ function FuelPage() {
               </div>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              {fuelType} @ ₹{price.toFixed(2)}/{fuelType === "CNG" ? "Kg" : "L"} — pulled automatically based on your saved location profile ({stateName}).
+              {fuelType} @ ₹{fuelRates[fuelType] ? fuelRates[fuelType].toFixed(2) : "..."}/{fuelType === "CNG" ? "Kg" : "L"} — pulled automatically based on your saved location profile ({stateName}).
             </p>
           </div>
         </TabsContent>
@@ -342,6 +330,7 @@ function FuelPage() {
   );
 }
 
+// Sub-components
 function Stat({ label, value, accent, good }: { label: string; value: string; accent?: boolean; good?: boolean }) {
   return (
     <div className="rounded-xl border border-border bg-card p-5">
