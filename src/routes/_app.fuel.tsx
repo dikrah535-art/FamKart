@@ -16,11 +16,10 @@ import { friendlyError } from "@/lib/friendly-error";
 export const Route = createFileRoute("/_app/fuel")({ component: FuelPage });
 
 const INDIAN_STATES = [
-  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", 
+  "Andhra Pradesh", "Bihar", "Chhattisgarh", "Delhi", "Goa", 
   "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", 
-  "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", 
-  "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", 
-  "Uttar Pradesh", "Uttarakhand", "West Bengal", "Delhi"
+  "Madhya Pradesh", "Maharashtra", "Odisha", "Punjab", "Rajasthan", "Tamil Nadu", 
+  "Telangana", "Uttar Pradesh", "Uttarakhand", "West Bengal"
 ];
 
 type FuelType = "Petrol" | "Diesel" | "CNG";
@@ -38,20 +37,19 @@ function FuelPage() {
   const [budget, setBudget] = useState(0);
   const [spent, setSpent] = useState(0);
 
-  // States for dynamic prices and real-time state preferences
+  // Core reactive fuel states
   const [stateName, setStateName] = useState<string>("Rajasthan");
-  const [fuelRates, setFuelRates] = useState<Record<FuelType, number>>({ Petrol: 100, Diesel: 90, CNG: 85 });
+  const [fuelRates, setFuelRates] = useState<Record<FuelType, number>>({ Petrol: 112.70, Diesel: 98.39, CNG: 96.00 });
   const [ratesLoading, setRatesLoading] = useState(true);
   const [updatingProfile, setUpdatingProfile] = useState(false);
 
   const price = fuelRates[fuelType];
 
-  // Core rate fetching function with safe case-insensitive checking
+  // Fetches accurate database variables dynamically
   const fetchStateRates = async (targetState: string) => {
     setRatesLoading(true);
-    console.log(`[Fuel Sync] Fetching rates for state: "${targetState}"`);
+    console.log(`[Fuel Sync] Querying DB for state: "${targetState}"`);
     
-    // Using ilike to prevent problems if database names are in ALL CAPS or lowercase
     const { data, error } = await supabase
       .from("daily_fuel_rates")
       .select("state_name, petrol_rate, diesel_rate, cng_rate")
@@ -59,25 +57,23 @@ function FuelPage() {
       .maybeSingle();
 
     if (error) {
-      console.error("[Fuel Sync] Supabase error fetching rates:", error);
+      console.error("[Fuel Sync] Supabase query error:", error);
     }
 
     if (data) {
-      console.log("[Fuel Sync] Successfully found rates in database:", data);
+      console.log("[Fuel Sync] Database record matched:", data);
       setFuelRates({
-        Petrol: Number(data.petrol_rate) || 100,
-        Diesel: Number(data.diesel_rate) || 90,
-        CNG: Number(data.cng_rate) || 85
+        Petrol: Number(data.petrol_rate),
+        Diesel: Number(data.diesel_rate),
+        CNG: Number(data.cng_rate)
       });
     } else {
-      console.warn(`[Fuel Sync] No rates found matching "${targetState}". Is the table empty? Using defaults.`);
-      // Default fallbacks so the app doesn't show 0
-      setFuelRates({ Petrol: 101.25, Diesel: 93.40, CNG: 82.10 });
+      console.warn(`[Fuel Sync] Warning: "${targetState}" missing from table rows.`);
     }
     setRatesLoading(false);
   };
 
-  // Setup Initial Profile Preference & Listen for Live Changes
+  // Sync state view and set live web channel pipeline
   useEffect(() => {
     async function initLocation() {
       if (!user?.id) return;
@@ -93,20 +89,17 @@ function FuelPage() {
     }
     initLocation();
 
-    // Realtime subscription setup
     const channel = supabase
       .channel("live_fuel_changes")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "daily_fuel_rates" },
-        (payload) => {
-          console.log("[Fuel Sync] Realtime update received from DB!", payload);
+        () => {
+          // Triggers instant background redraw when values shift
           fetchStateRates(stateName);
         }
       )
-      .subscribe((status) => {
-        console.log(`[Fuel Sync] Realtime connection status: ${status}`);
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
