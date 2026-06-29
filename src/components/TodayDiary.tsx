@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Save, RefreshCw, FileText, CloudCheck, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
-export function Notebook() {
+export function TodayDiary() {
   const { family, user } = useAuth();
   const [content, setContent] = useState<string>("");
   const [syncStatus, setSyncStatus] = useState<"synced" | "draft" | "saving" | "error">("synced");
