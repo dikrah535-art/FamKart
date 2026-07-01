@@ -157,6 +157,7 @@ export type Database = {
       }
       notebook_entries: {
         Row: {
+          content: string
           created_at: string
           entry_date: string
           family_id: string
@@ -165,9 +166,11 @@ export type Database = {
           rows: Json
           total_amount: number
           updated_at: string
+          updated_by: string | null
           user_id: string
         }
         Insert: {
+          content?: string
           created_at?: string
           entry_date: string
           family_id: string
@@ -176,9 +179,11 @@ export type Database = {
           rows?: Json
           total_amount?: number
           updated_at?: string
+          updated_by?: string | null
           user_id: string
         }
         Update: {
+          content?: string
           created_at?: string
           entry_date?: string
           family_id?: string
@@ -187,6 +192,7 @@ export type Database = {
           rows?: Json
           total_amount?: number
           updated_at?: string
+          updated_by?: string | null
           user_id?: string
         }
         Relationships: []

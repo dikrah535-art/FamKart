@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { inr } from "@/lib/format";
 import { CategoryIcon } from "@/components/CategoryIcon";
-import { TodayDiary } from "@/components/TodayDiary";
+import { FamilyNotebook } from "@/components/notebook/FamilyNotebook";
 import { requeueRecurringItems } from "@/lib/recurring";
 
 export const Route = createFileRoute("/_app/dashboard")({ component: Dashboard });
@@ -91,7 +91,12 @@ function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <TodayDiary />
+      <FamilyNotebook
+        showHeader={false}
+        showBackButton={false}
+        dashboardLink={false}
+        showCalendar={false}
+      />
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <NeededStat value={needed} onClick={() => navigate({ to: "/items", search: { tab: "needed" } })} reduce={!!reduce} />
