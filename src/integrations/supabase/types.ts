@@ -159,6 +159,7 @@ export type Database = {
         Row: {
           content: string
           created_at: string
+          diary_notes: string
           entry_date: string
           family_id: string
           greeting: string | null
@@ -172,6 +173,7 @@ export type Database = {
         Insert: {
           content?: string
           created_at?: string
+          diary_notes?: string
           entry_date: string
           family_id: string
           greeting?: string | null
@@ -185,6 +187,7 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string
+          diary_notes?: string
           entry_date?: string
           family_id?: string
           greeting?: string | null

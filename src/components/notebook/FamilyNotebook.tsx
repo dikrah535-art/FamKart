@@ -28,6 +28,7 @@ type Entry = {
   id: string;
   entry_date: string;
   content: string;
+  diary_notes: string;
   rows: DiaryRow[];
   total_amount: number;
   user_id: string;
@@ -48,6 +49,10 @@ const RULE = "rgba(255,220,150,0.08)";
 const RULE_BORDER = "rgba(255,220,150,0.12)";
 const MARGIN = "rgba(239,68,68,0.3)";
 const HEADER_BG = "rgba(255,220,150,0.15)";
+const INK = "#F3E2BC";
+const GHOST = "rgba(232,213,176,0.35)";
+const UNITS = ["Kg", "Gram", "Litre", "ml", "Piece", "Packet", "Bottle", "Box", "Dozen"];
+const MIN_ROWS = 6;
 
 function parseDate(s: string) {
   return new Date(s + "T00:00:00");
@@ -60,7 +65,7 @@ function toDateStr(d: Date) {
 function fmtDateLong(d: Date) {
   return d.toLocaleDateString("en-GB", {
     weekday: "long",
-    day: "2-digit",
+    day: "numeric",
     month: "long",
     year: "numeric",
   });
@@ -70,8 +75,12 @@ function todayDateStr() {
   return toDateStr(new Date());
 }
 
-function draftKey(familyId: string, date: string) {
-  return `famkart:notebook:${familyId}:${date}`;
+function draftRowsKey(familyId: string, date: string) {
+  return `famkart:notebook:${familyId}:${date}:rows`;
+}
+
+function draftNotesKey(familyId: string, date: string) {
+  return `famkart:notebook:${familyId}:${date}:diary_notes`;
 }
 
 function blankEntry(date: string): Entry {
@@ -79,6 +88,7 @@ function blankEntry(date: string): Entry {
     id: `draft-${date}`,
     entry_date: date,
     content: "",
+    diary_notes: "",
     rows: [],
     total_amount: 0,
     user_id: "",
@@ -99,25 +109,71 @@ function upsertEntry(entries: Entry[], next: Entry) {
   return sortEntries(copy);
 }
 
-function contentFromLegacyRows(entry: Entry) {
-  if (entry.content) return entry.content;
-  if (!entry.rows?.length) return "";
+function normalizeRows(rows: DiaryRow[] | null | undefined) {
+  return (rows ?? []).map((row) => ({
+    item: row.item ?? "",
+    qty: row.qty ?? "",
+    unit: row.unit ?? "",
+    bought: Boolean(row.bought),
+    price: row.price ?? row.amount ?? "",
+  }));
+}
 
-  const lines = entry.rows.map((row, index) => {
-    const parts = [
-      `${index + 1}.`,
-      row.item,
-      row.qty ? `- ${row.qty}` : "",
-      row.unit,
-      row.status ? `(${row.status.replace("_", " ")})` : "",
-      row.bought ? "[bought]" : "",
-      row.price != null ? `Rs ${row.price}` : row.amount != null ? `Rs ${row.amount}` : "",
-    ].filter(Boolean);
-    return parts.join(" ");
-  });
+function rowsFromEntry(entry: Entry) {
+  const normalized = normalizeRows(entry.rows);
+  if (normalized.length > 0) return normalized;
+  if (!entry.content?.trim()) return [];
 
-  if (entry.total_amount) lines.push(`Total Spent: ${inr(Number(entry.total_amount) || 0)}`);
-  return lines.join("\n");
+  return entry.content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => ({ item: line, qty: "", unit: "", bought: false, price: "" }));
+}
+
+function visibleRows(rows: DiaryRow[]) {
+  const padded = [...rows];
+  while (padded.length < MIN_ROWS) padded.push({ item: "", qty: "", unit: "", bought: false, price: "" });
+  return padded;
+}
+
+function compactRows(rows: DiaryRow[]) {
+  return rows
+    .map((row) => ({
+      item: row.item?.trim() ?? "",
+      qty: row.qty != null ? String(row.qty).trim() : "",
+      unit: row.unit?.trim() ?? "",
+      bought: Boolean(row.bought),
+      price: row.price != null ? String(row.price).trim() : "",
+    }))
+    .filter((row) => row.item || row.qty || row.unit || row.bought || row.price);
+}
+
+function rowsSignature(rows: DiaryRow[]) {
+  return JSON.stringify(compactRows(rows));
+}
+
+function totalAmount(rows: DiaryRow[]) {
+  return compactRows(rows).reduce((sum, row) => {
+    const raw = String(row.price ?? "").replace(/[^\d.]/g, "");
+    return sum + (Number(raw) || 0);
+  }, 0);
+}
+
+function notesFromEntry(entry: Entry) {
+  return entry.diary_notes ?? "";
+}
+
+function memberName(profileName: string | null | undefined, email: string | undefined) {
+  const source = profileName?.trim() || email?.split("@")[0] || "there";
+  return source.split(/\s+/)[0] || source;
+}
+
+function greetingForHour(hour: number) {
+  if (hour >= 5 && hour < 12) return "Good Morning";
+  if (hour >= 12 && hour < 17) return "Good Afternoon";
+  if (hour >= 17 && hour < 21) return "Good Evening";
+  return "Good Night";
 }
 
 export function FamilyNotebook({
@@ -126,21 +182,26 @@ export function FamilyNotebook({
   dashboardLink = true,
   showCalendar = true,
 }: FamilyNotebookProps) {
-  const { family, user } = useAuth();
+  const { family, profile, user } = useAuth();
   const reduce = useReducedMotion();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(todayDateStr());
-  const [content, setContent] = useState("");
+  const [rows, setRows] = useState<DiaryRow[]>([]);
+  const [diaryNotes, setDiaryNotes] = useState("");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
   const [flipDir, setFlipDir] = useState<1 | -1>(1);
+  const [headerAnimated, setHeaderAnimated] = useState(false);
+  const [currentHour, setCurrentHour] = useState(new Date().getHours());
 
-  const serverContentRef = useRef("");
+  const serverRowsRef = useRef("");
+  const serverNotesRef = useRef("");
   const isSavingRef = useRef(false);
-  const pendingContentRef = useRef<string | null>(null);
+  const pendingSaveRef = useRef<{ rows: DiaryRow[]; diaryNotes: string } | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const selectedRef = useRef(selected);
-  const contentRef = useRef(content);
+  const rowsRef = useRef(rows);
+  const diaryNotesRef = useRef(diaryNotes);
   const syncStatusRef = useRef(syncStatus);
 
   useEffect(() => {
@@ -148,8 +209,12 @@ export function FamilyNotebook({
   }, [selected]);
 
   useEffect(() => {
-    contentRef.current = content;
-  }, [content]);
+    rowsRef.current = rows;
+  }, [rows]);
+
+  useEffect(() => {
+    diaryNotesRef.current = diaryNotes;
+  }, [diaryNotes]);
 
   useEffect(() => {
     syncStatusRef.current = syncStatus;
@@ -164,18 +229,40 @@ export function FamilyNotebook({
   const current = entryByDate[selected] ?? blankEntry(selected);
   const currentIdx = entries.findIndex((entry) => entry.entry_date === selected);
   const entryDates = useMemo(() => entries.map((entry) => parseDate(entry.entry_date)), [entries]);
+  const greeting = `${greetingForHour(currentHour)}, ${memberName(profile?.full_name, user?.email)}`;
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentHour(new Date().getHours()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const applyEntryToEditor = (entry: Entry, familyId: string) => {
-    const serverText = contentFromLegacyRows(entry);
-    const cachedDraft = localStorage.getItem(draftKey(familyId, entry.entry_date));
+    const serverRows = rowsFromEntry(entry);
+    const serverSig = rowsSignature(serverRows);
+    const serverNotes = notesFromEntry(entry);
+    const cachedRowsDraft = localStorage.getItem(draftRowsKey(familyId, entry.entry_date));
+    const cachedNotesDraft = localStorage.getItem(draftNotesKey(familyId, entry.entry_date));
 
-    serverContentRef.current = serverText;
-    if (cachedDraft !== null && cachedDraft !== serverText) {
-      setContent(cachedDraft);
+    serverRowsRef.current = serverSig;
+    serverNotesRef.current = serverNotes;
+
+    if (cachedRowsDraft !== null && cachedRowsDraft !== serverSig) {
+      try {
+        setRows(JSON.parse(cachedRowsDraft) as DiaryRow[]);
+        setSyncStatus("draft");
+      } catch {
+        localStorage.removeItem(draftRowsKey(familyId, entry.entry_date));
+      }
+    } else {
+      setRows(serverRows);
+    }
+
+    if (cachedNotesDraft !== null && cachedNotesDraft !== serverNotes) {
+      setDiaryNotes(cachedNotesDraft);
       setSyncStatus("draft");
     } else {
-      setContent(serverText);
-      setSyncStatus("synced");
+      setDiaryNotes(serverNotes);
+      if (cachedRowsDraft === null || cachedRowsDraft === serverSig) setSyncStatus("synced");
     }
   };
 
@@ -185,7 +272,7 @@ export function FamilyNotebook({
     setLoading(true);
     const { data, error } = await supabase
       .from("notebook_entries")
-      .select("id,entry_date,content,rows,total_amount,user_id,updated_by")
+      .select("id,entry_date,content,diary_notes,rows,total_amount,user_id,updated_by")
       .eq("family_id", family.id)
       .order("entry_date", { ascending: false });
 
@@ -197,10 +284,7 @@ export function FamilyNotebook({
     }
 
     const today = todayDateStr();
-    const list = sortEntries(((data as unknown as Entry[]) ?? []).map((entry) => ({
-      ...entry,
-      content: contentFromLegacyRows(entry),
-    })));
+    const list = sortEntries((data as unknown as Entry[]) ?? []);
     const hasSelected = list.some((entry) => entry.entry_date === selectedRef.current);
     const nextSelected = hasSelected ? selectedRef.current : today;
     const nextCurrent = list.find((entry) => entry.entry_date === nextSelected) ?? blankEntry(nextSelected);
@@ -236,19 +320,23 @@ export function FamilyNotebook({
           const incoming = payload.new;
           if (!incoming) return;
 
-          const next = {
-            ...incoming,
-            content: contentFromLegacyRows(incoming),
-          };
+          setEntries((prev) => upsertEntry(prev, incoming));
 
-          setEntries((prev) => upsertEntry(prev, next));
+          if (incoming.entry_date === selectedRef.current && incoming.updated_by !== user?.id) {
+            const incomingRows = rowsFromEntry(incoming);
+            const incomingSig = rowsSignature(incomingRows);
+            const incomingNotes = notesFromEntry(incoming);
+            serverRowsRef.current = incomingSig;
+            serverNotesRef.current = incomingNotes;
 
-          if (next.entry_date === selectedRef.current && next.updated_by !== user?.id) {
-            serverContentRef.current = next.content;
-            const key = draftKey(family.id, next.entry_date);
-            if (syncStatusRef.current === "synced" || contentRef.current === serverContentRef.current) {
-              localStorage.removeItem(key);
-              setContent(next.content);
+            if (
+              syncStatusRef.current === "synced" ||
+              (rowsSignature(rowsRef.current) === incomingSig && diaryNotesRef.current === incomingNotes)
+            ) {
+              localStorage.removeItem(draftRowsKey(family.id, incoming.entry_date));
+              localStorage.removeItem(draftNotesKey(family.id, incoming.entry_date));
+              setRows(incomingRows);
+              setDiaryNotes(incomingNotes);
               setSyncStatus("synced");
             }
           }
@@ -271,27 +359,29 @@ export function FamilyNotebook({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
-  const executeSave = async (textToSave: string, dateToSave: string) => {
+  const executeSave = async (rowsToSave: DiaryRow[], notesToSave: string, dateToSave: string) => {
     if (!family?.id || !user?.id) return;
 
     isSavingRef.current = true;
     setSyncStatus("saving");
 
+    const cleanRows = compactRows(rowsToSave);
     const existing = entryByDate[dateToSave];
     const payload = {
       family_id: family.id,
       user_id: existing?.user_id || user.id,
       entry_date: dateToSave,
-      content: textToSave,
-      rows: existing?.rows ?? [],
-      total_amount: existing?.total_amount ?? 0,
+      content: "",
+      diary_notes: notesToSave,
+      rows: cleanRows,
+      total_amount: totalAmount(cleanRows),
       updated_by: user.id,
     };
 
     const { data, error } = await supabase
       .from("notebook_entries")
       .upsert(payload, { onConflict: "family_id,entry_date" })
-      .select("id,entry_date,content,rows,total_amount,user_id,updated_by")
+      .select("id,entry_date,content,diary_notes,rows,total_amount,user_id,updated_by")
       .single();
 
     if (error) {
@@ -299,46 +389,74 @@ export function FamilyNotebook({
       setSyncStatus("error");
     } else if (data) {
       const saved = data as unknown as Entry;
-      serverContentRef.current = saved.content ?? "";
-      localStorage.removeItem(draftKey(family.id, dateToSave));
-      setEntries((prev) => upsertEntry(prev, { ...saved, rows: saved.rows ?? [] }));
+      const savedRows = rowsFromEntry(saved);
+      const savedNotes = notesFromEntry(saved);
+      serverRowsRef.current = rowsSignature(savedRows);
+      serverNotesRef.current = savedNotes;
+      localStorage.removeItem(draftRowsKey(family.id, dateToSave));
+      localStorage.removeItem(draftNotesKey(family.id, dateToSave));
+      setEntries((prev) => upsertEntry(prev, { ...saved, rows: savedRows }));
       setSyncStatus("synced");
     }
 
     isSavingRef.current = false;
-    if (pendingContentRef.current !== null) {
-      const pending = pendingContentRef.current;
-      pendingContentRef.current = null;
-      executeSave(pending, dateToSave);
+    if (pendingSaveRef.current !== null) {
+      const pending = pendingSaveRef.current;
+      pendingSaveRef.current = null;
+      executeSave(pending.rows, pending.diaryNotes, dateToSave);
     }
   };
 
-  const queueSave = (nextContent: string, dateToSave: string) => {
-    if (nextContent === serverContentRef.current) {
+  const queueSave = (nextRows: DiaryRow[], nextNotes: string, dateToSave: string) => {
+    if (rowsSignature(nextRows) === serverRowsRef.current && nextNotes === serverNotesRef.current) {
       setSyncStatus("synced");
-      if (family?.id) localStorage.removeItem(draftKey(family.id, dateToSave));
+      if (family?.id) {
+        localStorage.removeItem(draftRowsKey(family.id, dateToSave));
+        localStorage.removeItem(draftNotesKey(family.id, dateToSave));
+      }
       return;
     }
 
     if (isSavingRef.current) {
-      pendingContentRef.current = nextContent;
+      pendingSaveRef.current = { rows: nextRows, diaryNotes: nextNotes };
       return;
     }
 
-    executeSave(nextContent, dateToSave);
+    executeSave(nextRows, nextNotes, dateToSave);
   };
 
-  const handleContentChange = (nextContent: string) => {
+  const handleRowsChange = (nextRows: DiaryRow[]) => {
     if (!family?.id) return;
 
-    setContent(nextContent);
+    rowsRef.current = nextRows;
+    setRows(nextRows);
     setSyncStatus("draft");
-    localStorage.setItem(draftKey(family.id, selected), nextContent);
-    setEntries((prev) => upsertEntry(prev, { ...current, content: nextContent }));
+    localStorage.setItem(draftRowsKey(family.id, selected), JSON.stringify(nextRows));
+    setEntries((prev) => upsertEntry(prev, {
+      ...current,
+      rows: compactRows(nextRows),
+      diary_notes: diaryNotesRef.current,
+      total_amount: totalAmount(nextRows),
+    }));
 
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
-      queueSave(nextContent, selected);
+      queueSave(nextRows, diaryNotesRef.current, selected);
+    }, 2000);
+  };
+
+  const handleDiaryNotesChange = (nextNotes: string) => {
+    if (!family?.id) return;
+
+    diaryNotesRef.current = nextNotes;
+    setDiaryNotes(nextNotes);
+    setSyncStatus("draft");
+    localStorage.setItem(draftNotesKey(family.id, selected), nextNotes);
+    setEntries((prev) => upsertEntry(prev, { ...current, diary_notes: nextNotes }));
+
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      queueSave(rowsRef.current, nextNotes, selected);
     }, 2000);
   };
 
@@ -426,9 +544,15 @@ export function FamilyNotebook({
               >
                 <DiaryPage
                   entry={current}
-                  content={content}
+                  greeting={greeting}
+                  rows={rows}
+                  diaryNotes={diaryNotes}
                   syncStatus={syncStatus}
-                  onChange={handleContentChange}
+                  reduceMotion={Boolean(reduce)}
+                  animateHeader={!headerAnimated}
+                  onHeaderDone={() => setHeaderAnimated(true)}
+                  onRowsChange={handleRowsChange}
+                  onDiaryNotesChange={handleDiaryNotesChange}
                 />
               </motion.div>
             </AnimatePresence>
@@ -502,57 +626,256 @@ function EmptyNotebookHint() {
 
 function DiaryPage({
   entry,
-  content,
+  greeting,
+  rows,
+  diaryNotes,
   syncStatus,
-  onChange,
+  reduceMotion,
+  animateHeader,
+  onHeaderDone,
+  onRowsChange,
+  onDiaryNotesChange,
 }: {
   entry: Entry;
-  content: string;
+  greeting: string;
+  rows: DiaryRow[];
+  diaryNotes: string;
   syncStatus: SyncStatus;
-  onChange: (nextContent: string) => void;
+  reduceMotion: boolean;
+  animateHeader: boolean;
+  onHeaderDone: () => void;
+  onRowsChange: (nextRows: DiaryRow[]) => void;
+  onDiaryNotesChange: (nextNotes: string) => void;
 }) {
   const date = parseDate(entry.entry_date);
-  const hasLegacyRows = !content && entry.rows?.length > 0;
+  const [greetingDone, setGreetingDone] = useState(!animateHeader || reduceMotion);
+
+  useEffect(() => {
+    if (!animateHeader || reduceMotion) setGreetingDone(true);
+  }, [animateHeader, reduceMotion]);
+
+  const patchRow = (index: number, patch: Partial<DiaryRow>) => {
+    const next = visibleRows(rows);
+    next[index] = { ...next[index], ...patch };
+    onRowsChange(next);
+  };
+
+  const addRow = () => {
+    onRowsChange([...visibleRows(rows), { item: "", qty: "", unit: "", bought: false, price: "" }]);
+  };
 
   return (
     <div
-      className="rounded-md border p-6 md:p-8"
+      className="rounded-md border p-5 md:p-8"
       style={{
         background: PAPER,
         color: TEXT,
         borderColor: "rgba(255,220,150,0.1)",
         boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-        backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent 31px, ${RULE} 31px, ${RULE} 32px)`,
+        backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent 39px, ${RULE} 39px, ${RULE} 40px)`,
       }}
     >
-      <div className="relative pl-10 md:pl-14">
+      <div className="relative pl-9 md:pl-14">
         <span
-          className="pointer-events-none absolute top-0 bottom-0 left-8 md:left-12 w-[2px]"
+          className="pointer-events-none absolute top-0 bottom-0 left-6 md:left-10 w-[2px]"
           style={{ background: MARGIN }}
         />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="font-[Caveat] text-3xl font-semibold">{fmtDateLong(date)}</p>
-          <SyncBadge status={syncStatus} />
+        <div className="min-h-[94px]">
+          <div className="flex items-start justify-between gap-3">
+            <p className="min-h-[44px] font-[Caveat] text-4xl font-semibold leading-tight md:text-5xl">
+              <TypewriterText
+                text={greeting}
+                delayMs={44}
+                disabled={!animateHeader || reduceMotion}
+                onDone={() => {
+                  setGreetingDone(true);
+                }}
+              />
+            </p>
+            <SyncBadge status={syncStatus} />
+          </div>
+          <p className="mt-1 min-h-[32px] text-right font-[Caveat] text-2xl font-medium md:text-3xl">
+            {greetingDone && (
+              <TypewriterText
+                text={fmtDateLong(date)}
+                delayMs={30}
+                disabled={!animateHeader || reduceMotion}
+                onDone={onHeaderDone}
+              />
+            )}
+          </p>
         </div>
 
-        {hasLegacyRows ? (
-          <LegacyRowsTable entry={entry} />
-        ) : (
-          <textarea
-            value={content}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder="Write today's family notes here..."
-            spellCheck
-            className="mt-4 block min-h-[360px] w-full resize-y border-0 bg-transparent p-0 text-2xl leading-8 outline-none placeholder:text-[#E8D5B0]/35 focus:ring-0"
-            style={{
-              color: TEXT,
-              fontFamily: "Caveat, Patrick Hand, cursive",
-              caretColor: TEXT,
-            }}
-          />
-        )}
+        <ShoppingRowsTable rows={visibleRows(rows)} onPatchRow={patchRow} />
+        <button
+          type="button"
+          onClick={addRow}
+          className="mt-4 font-[Caveat] text-2xl transition hover:brightness-125"
+          style={{ color: INK }}
+        >
+          + Add another item
+        </button>
+        <div className="my-5 flex items-center gap-4" style={{ color: GHOST }}>
+          <span className="h-px flex-1" style={{ background: RULE_BORDER }} />
+          <span className="font-[Caveat] text-2xl" style={{ color: TEXT }}>Family Notes</span>
+          <span className="h-px flex-1" style={{ background: RULE_BORDER }} />
+        </div>
+        <textarea
+          value={diaryNotes}
+          onChange={(event) => onDiaryNotesChange(event.target.value)}
+          placeholder="Milkman already came. Don't forget electricity bill tomorrow..."
+          className="block min-h-[180px] w-full resize-y border-0 bg-transparent p-0 font-[Caveat] text-2xl leading-10 outline-none placeholder:text-[#E8D5B0]/35 md:text-3xl"
+          style={{ color: INK, caretColor: INK }}
+        />
+        <p className="mt-5 text-sm font-medium">Total Spent: {inr(totalAmount(rows))}</p>
       </div>
     </div>
+  );
+}
+
+function TypewriterText({
+  text,
+  delayMs,
+  disabled,
+  onDone,
+}: {
+  text: string;
+  delayMs: number;
+  disabled: boolean;
+  onDone?: () => void;
+}) {
+  const [shown, setShown] = useState(disabled ? text : "");
+  const startedFor = useRef(text);
+
+  useEffect(() => {
+    if (disabled) {
+      setShown(text);
+      onDone?.();
+      return;
+    }
+
+    if (startedFor.current !== text) return;
+
+    setShown("");
+    let index = 0;
+    const timer = window.setInterval(() => {
+      index += 1;
+      setShown(text.slice(0, index));
+      if (index >= text.length) {
+        window.clearInterval(timer);
+        onDone?.();
+      }
+    }, delayMs);
+
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return <>{shown}</>;
+}
+
+function ShoppingRowsTable({
+  rows,
+  onPatchRow,
+}: {
+  rows: DiaryRow[];
+  onPatchRow: (index: number, patch: Partial<DiaryRow>) => void;
+}) {
+  return (
+    <div className="mt-4 overflow-x-auto pb-1">
+      <table className="w-full min-w-[720px] text-sm md:text-base" style={{ fontFamily: "Inter, system-ui, sans-serif", color: TEXT }}>
+        <thead>
+          <tr className="text-left" style={{ background: HEADER_BG }}>
+            <th className="py-2 px-2 w-8 font-semibold">#</th>
+            <th className="py-2 px-2 font-semibold">Item Name</th>
+            <th className="py-2 px-2 w-24 font-semibold">Quantity</th>
+            <th className="py-2 px-2 w-32 font-semibold">Unit</th>
+            <th className="py-2 px-2 w-20 text-center font-semibold">Bought</th>
+            <th className="py-2 px-2 w-28 font-semibold">Price</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={index} style={{ borderTop: `1px solid ${RULE_BORDER}` }}>
+              <td className="py-2 px-2 opacity-60">{index + 1}</td>
+              <td className="px-2">
+                <NotebookInput
+                  value={row.item ?? ""}
+                  placeholder="Rice"
+                  className="text-2xl"
+                  onChange={(value) => onPatchRow(index, { item: value })}
+                />
+              </td>
+              <td className="px-2">
+                <NotebookInput
+                  value={row.qty != null ? String(row.qty) : ""}
+                  placeholder="2"
+                  inputMode="decimal"
+                  onChange={(value) => onPatchRow(index, { qty: value })}
+                />
+              </td>
+              <td className="px-2">
+                <select
+                  value={row.unit ?? ""}
+                  onChange={(event) => onPatchRow(index, { unit: event.target.value })}
+                  className="w-full rounded-none border-0 bg-transparent px-0 py-1 text-base outline-none"
+                  style={{ color: row.unit ? INK : GHOST }}
+                >
+                  <option value="">Unit</option>
+                  {UNITS.map((unit) => (
+                    <option key={unit} value={unit}>
+                      {unit}
+                    </option>
+                  ))}
+                </select>
+              </td>
+              <td className="px-2 text-center">
+                <input
+                  type="checkbox"
+                  checked={Boolean(row.bought)}
+                  onChange={(event) => onPatchRow(index, { bought: event.target.checked })}
+                  className="h-5 w-5 accent-[#E8D5B0]"
+                  aria-label={`Bought row ${index + 1}`}
+                />
+              </td>
+              <td className="px-2">
+                <NotebookInput
+                  value={row.price != null ? String(row.price) : ""}
+                  placeholder="₹120"
+                  inputMode="decimal"
+                  onChange={(value) => onPatchRow(index, { price: value })}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function NotebookInput({
+  value,
+  placeholder,
+  className = "",
+  inputMode,
+  onChange,
+}: {
+  value: string;
+  placeholder: string;
+  className?: string;
+  inputMode?: "decimal";
+  onChange: (value: string) => void;
+}) {
+  return (
+    <input
+      value={value}
+      placeholder={placeholder}
+      inputMode={inputMode}
+      onChange={(event) => onChange(event.target.value)}
+      className={`w-full border-0 bg-transparent px-0 py-1 font-[Caveat] leading-8 outline-none placeholder:text-[#E8D5B0]/35 ${className}`}
+      style={{ color: INK, caretColor: INK }}
+    />
   );
 }
 
@@ -568,44 +891,5 @@ function SyncBadge({ status }: { status: SyncStatus }) {
     <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: HEADER_BG, color: TEXT }}>
       {labels[status]}
     </span>
-  );
-}
-
-function LegacyRowsTable({ entry }: { entry: Entry }) {
-  return (
-    <>
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm" style={{ fontFamily: "Inter, system-ui, sans-serif", color: TEXT }}>
-          <thead>
-            <tr className="text-left" style={{ background: HEADER_BG }}>
-              <th className="py-2 px-2 w-8 font-semibold">#</th>
-              <th className="py-2 px-2 font-semibold">Item</th>
-              <th className="py-2 px-2 w-20 font-semibold">Qty</th>
-              <th className="py-2 px-2 w-20 font-semibold">Unit</th>
-              <th className="py-2 px-2 w-32 font-semibold">Status</th>
-              <th className="py-2 px-2 w-12 text-center font-semibold">Done</th>
-              <th className="py-2 px-2 w-24 font-semibold">Price</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(entry.rows || []).map((row, index) => {
-              const price = row.price != null ? String(row.price) : row.amount != null ? String(row.amount) : "";
-              return (
-                <tr key={index} style={{ borderTop: `1px solid ${RULE_BORDER}` }}>
-                  <td className="py-2 px-2 opacity-60">{index + 1}</td>
-                  <td className="px-2">{row.item ?? ""}</td>
-                  <td className="px-2">{row.qty ?? ""}</td>
-                  <td className="px-2">{row.unit ?? ""}</td>
-                  <td className="px-2">{(row.status ?? "").replace("_", " ")}</td>
-                  <td className="text-center px-2">{row.bought ? "Yes" : ""}</td>
-                  <td className="px-2">{price ? `Rs ${price}` : ""}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <p className="mt-5 text-sm font-medium">Total Spent: {inr(Number(entry.total_amount) || 0)}</p>
-    </>
   );
 }
