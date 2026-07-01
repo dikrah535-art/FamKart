@@ -31,6 +31,7 @@ type Entry = {
   diary_notes: string;
   rows: DiaryRow[];
   total_amount: number;
+  updated_at: string;
   user_id: string;
   updated_by: string | null;
   isDraft?: boolean;
@@ -83,6 +84,14 @@ function draftNotesKey(familyId: string, date: string) {
   return `famkart:notebook:${familyId}:${date}:diary_notes`;
 }
 
+function draftMetaKey(familyId: string, date: string) {
+  return `famkart:notebook:${familyId}:${date}:meta`;
+}
+
+type DraftMeta = {
+  baseUpdatedAt: string;
+};
+
 function blankEntry(date: string): Entry {
   return {
     id: `draft-${date}`,
@@ -91,6 +100,7 @@ function blankEntry(date: string): Entry {
     diary_notes: "",
     rows: [],
     total_amount: 0,
+    updated_at: "",
     user_id: "",
     updated_by: null,
     isDraft: true,
@@ -164,6 +174,27 @@ function notesFromEntry(entry: Entry) {
   return entry.diary_notes ?? "";
 }
 
+function readDraftMeta(familyId: string, date: string) {
+  try {
+    const raw = localStorage.getItem(draftMetaKey(familyId, date));
+    if (!raw) return null;
+    return JSON.parse(raw) as DraftMeta;
+  } catch {
+    localStorage.removeItem(draftMetaKey(familyId, date));
+    return null;
+  }
+}
+
+function writeDraftMeta(familyId: string, date: string, meta: DraftMeta) {
+  localStorage.setItem(draftMetaKey(familyId, date), JSON.stringify(meta));
+}
+
+function clearDraft(familyId: string, date: string, section: "rows" | "notes" | "all" = "all") {
+  if (section === "rows" || section === "all") localStorage.removeItem(draftRowsKey(familyId, date));
+  if (section === "notes" || section === "all") localStorage.removeItem(draftNotesKey(familyId, date));
+  if (section === "all") localStorage.removeItem(draftMetaKey(familyId, date));
+}
+
 function memberName(profileName: string | null | undefined, email: string | undefined) {
   const source = profileName?.trim() || email?.split("@")[0] || "there";
   return source.split(/\s+/)[0] || source;
@@ -197,12 +228,15 @@ export function FamilyNotebook({
   const serverRowsRef = useRef("");
   const serverNotesRef = useRef("");
   const isSavingRef = useRef(false);
-  const pendingSaveRef = useRef<{ rows: DiaryRow[]; diaryNotes: string } | null>(null);
+  const pendingSaveRef = useRef<{ rows: DiaryRow[]; diaryNotes: string; date: string } | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const selectedRef = useRef(selected);
   const rowsRef = useRef(rows);
   const diaryNotesRef = useRef(diaryNotes);
   const syncStatusRef = useRef(syncStatus);
+  const serverUpdatedAtRef = useRef("");
+  const dirtyRowsRef = useRef(false);
+  const dirtyNotesRef = useRef(false);
 
   useEffect(() => {
     selectedRef.current = selected;
@@ -242,27 +276,50 @@ export function FamilyNotebook({
     const serverNotes = notesFromEntry(entry);
     const cachedRowsDraft = localStorage.getItem(draftRowsKey(familyId, entry.entry_date));
     const cachedNotesDraft = localStorage.getItem(draftNotesKey(familyId, entry.entry_date));
+    const draftMeta = readDraftMeta(familyId, entry.entry_date);
+    const serverUpdatedAt = entry.updated_at ?? "";
 
     serverRowsRef.current = serverSig;
     serverNotesRef.current = serverNotes;
+    serverUpdatedAtRef.current = serverUpdatedAt;
 
-    if (cachedRowsDraft !== null && cachedRowsDraft !== serverSig) {
+    const canUseRowsDraft =
+      cachedRowsDraft !== null &&
+      cachedRowsDraft !== serverSig &&
+      draftMeta?.baseUpdatedAt === serverUpdatedAt;
+    const canUseNotesDraft =
+      cachedNotesDraft !== null &&
+      cachedNotesDraft !== serverNotes &&
+      draftMeta?.baseUpdatedAt === serverUpdatedAt;
+
+    if (canUseRowsDraft) {
       try {
         setRows(JSON.parse(cachedRowsDraft) as DiaryRow[]);
+        dirtyRowsRef.current = true;
         setSyncStatus("draft");
       } catch {
         localStorage.removeItem(draftRowsKey(familyId, entry.entry_date));
+        dirtyRowsRef.current = false;
       }
     } else {
+      if (cachedRowsDraft !== null && cachedRowsDraft !== serverSig) {
+        clearDraft(familyId, entry.entry_date, "rows");
+      }
+      dirtyRowsRef.current = false;
       setRows(serverRows);
     }
 
-    if (cachedNotesDraft !== null && cachedNotesDraft !== serverNotes) {
+    if (canUseNotesDraft) {
       setDiaryNotes(cachedNotesDraft);
+      dirtyNotesRef.current = true;
       setSyncStatus("draft");
     } else {
+      if (cachedNotesDraft !== null && cachedNotesDraft !== serverNotes) {
+        clearDraft(familyId, entry.entry_date, "notes");
+      }
+      dirtyNotesRef.current = false;
       setDiaryNotes(serverNotes);
-      if (cachedRowsDraft === null || cachedRowsDraft === serverSig) setSyncStatus("synced");
+      if (!canUseRowsDraft) setSyncStatus("synced");
     }
   };
 
@@ -272,7 +329,7 @@ export function FamilyNotebook({
     setLoading(true);
     const { data, error } = await supabase
       .from("notebook_entries")
-      .select("id,entry_date,content,diary_notes,rows,total_amount,user_id,updated_by")
+      .select("id,entry_date,content,diary_notes,rows,total_amount,updated_at,user_id,updated_by")
       .eq("family_id", family.id)
       .order("entry_date", { ascending: false });
 
@@ -322,23 +379,30 @@ export function FamilyNotebook({
 
           setEntries((prev) => upsertEntry(prev, incoming));
 
-          if (incoming.entry_date === selectedRef.current && incoming.updated_by !== user?.id) {
+          if (incoming.entry_date === selectedRef.current) {
             const incomingRows = rowsFromEntry(incoming);
             const incomingSig = rowsSignature(incomingRows);
             const incomingNotes = notesFromEntry(incoming);
+            const incomingUpdatedAt = incoming.updated_at ?? "";
             serverRowsRef.current = incomingSig;
             serverNotesRef.current = incomingNotes;
+            serverUpdatedAtRef.current = incomingUpdatedAt;
 
-            if (
-              syncStatusRef.current === "synced" ||
-              (rowsSignature(rowsRef.current) === incomingSig && diaryNotesRef.current === incomingNotes)
-            ) {
-              localStorage.removeItem(draftRowsKey(family.id, incoming.entry_date));
-              localStorage.removeItem(draftNotesKey(family.id, incoming.entry_date));
+            if (!dirtyRowsRef.current || rowsSignature(rowsRef.current) === incomingSig) {
+              dirtyRowsRef.current = false;
+              rowsRef.current = incomingRows;
+              clearDraft(family.id, incoming.entry_date, "rows");
               setRows(incomingRows);
-              setDiaryNotes(incomingNotes);
-              setSyncStatus("synced");
             }
+
+            if (!dirtyNotesRef.current || diaryNotesRef.current === incomingNotes) {
+              dirtyNotesRef.current = false;
+              diaryNotesRef.current = incomingNotes;
+              clearDraft(family.id, incoming.entry_date, "notes");
+              setDiaryNotes(incomingNotes);
+            }
+
+            setSyncStatus(dirtyRowsRef.current || dirtyNotesRef.current ? "draft" : "synced");
           }
         },
       )
@@ -349,7 +413,7 @@ export function FamilyNotebook({
       supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [family?.id, user?.id]);
+  }, [family?.id]);
 
   useEffect(() => {
     if (!family?.id) return;
@@ -381,7 +445,7 @@ export function FamilyNotebook({
     const { data, error } = await supabase
       .from("notebook_entries")
       .upsert(payload, { onConflict: "family_id,entry_date" })
-      .select("id,entry_date,content,diary_notes,rows,total_amount,user_id,updated_by")
+      .select("id,entry_date,content,diary_notes,rows,total_amount,updated_at,user_id,updated_by")
       .single();
 
     if (error) {
@@ -393,8 +457,10 @@ export function FamilyNotebook({
       const savedNotes = notesFromEntry(saved);
       serverRowsRef.current = rowsSignature(savedRows);
       serverNotesRef.current = savedNotes;
-      localStorage.removeItem(draftRowsKey(family.id, dateToSave));
-      localStorage.removeItem(draftNotesKey(family.id, dateToSave));
+      serverUpdatedAtRef.current = saved.updated_at ?? "";
+      dirtyRowsRef.current = false;
+      dirtyNotesRef.current = false;
+      clearDraft(family.id, dateToSave);
       setEntries((prev) => upsertEntry(prev, { ...saved, rows: savedRows }));
       setSyncStatus("synced");
     }
@@ -403,7 +469,7 @@ export function FamilyNotebook({
     if (pendingSaveRef.current !== null) {
       const pending = pendingSaveRef.current;
       pendingSaveRef.current = null;
-      executeSave(pending.rows, pending.diaryNotes, dateToSave);
+      executeSave(pending.rows, pending.diaryNotes, pending.date);
     }
   };
 
@@ -411,27 +477,47 @@ export function FamilyNotebook({
     if (rowsSignature(nextRows) === serverRowsRef.current && nextNotes === serverNotesRef.current) {
       setSyncStatus("synced");
       if (family?.id) {
-        localStorage.removeItem(draftRowsKey(family.id, dateToSave));
-        localStorage.removeItem(draftNotesKey(family.id, dateToSave));
+        dirtyRowsRef.current = false;
+        dirtyNotesRef.current = false;
+        clearDraft(family.id, dateToSave);
       }
       return;
     }
 
     if (isSavingRef.current) {
-      pendingSaveRef.current = { rows: nextRows, diaryNotes: nextNotes };
+      pendingSaveRef.current = { rows: nextRows, diaryNotes: nextNotes, date: dateToSave };
       return;
     }
 
     executeSave(nextRows, nextNotes, dateToSave);
   };
 
+  useEffect(() => {
+    if (!family?.id) return;
+
+    const syncOfflineDraft = () => {
+      if (rowsSignature(rowsRef.current) === serverRowsRef.current && diaryNotesRef.current === serverNotesRef.current) {
+        return;
+      }
+      queueSave(rowsRef.current, diaryNotesRef.current, selectedRef.current);
+    };
+
+    window.addEventListener("online", syncOfflineDraft);
+    return () => window.removeEventListener("online", syncOfflineDraft);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [family?.id]);
+
   const handleRowsChange = (nextRows: DiaryRow[]) => {
     if (!family?.id) return;
 
     rowsRef.current = nextRows;
+    dirtyRowsRef.current = true;
     setRows(nextRows);
     setSyncStatus("draft");
     localStorage.setItem(draftRowsKey(family.id, selected), JSON.stringify(nextRows));
+    writeDraftMeta(family.id, selected, {
+      baseUpdatedAt: serverUpdatedAtRef.current,
+    });
     setEntries((prev) => upsertEntry(prev, {
       ...current,
       rows: compactRows(nextRows),
@@ -449,9 +535,13 @@ export function FamilyNotebook({
     if (!family?.id) return;
 
     diaryNotesRef.current = nextNotes;
+    dirtyNotesRef.current = true;
     setDiaryNotes(nextNotes);
     setSyncStatus("draft");
     localStorage.setItem(draftNotesKey(family.id, selected), nextNotes);
+    writeDraftMeta(family.id, selected, {
+      baseUpdatedAt: serverUpdatedAtRef.current,
+    });
     setEntries((prev) => upsertEntry(prev, { ...current, diary_notes: nextNotes }));
 
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
